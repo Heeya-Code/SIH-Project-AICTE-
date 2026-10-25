@@ -16,7 +16,7 @@ const BTN: Record<string, string> = {
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof BTN; size?: 'sm' | 'md'; busy?: boolean };
 export const Button = forwardRef<HTMLButtonElement, BtnProps>(({ variant = 'secondary', size = 'md', busy, className, children, disabled, type = 'button', ...p }, ref) => (
   <button ref={ref} type={type} disabled={disabled || busy} {...p}
-    className={cx('inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed', size === 'sm' ? 'px-2.5 py-1 text-[13px]' : 'px-3.5 py-2', BTN[variant], className)}>
+    className={cx('inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors duration-100 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-teal focus-visible:outline-offset-2', size === 'sm' ? 'min-h-[32px] px-2.5 py-1 text-[13px]' : 'min-h-[40px] px-3.5 py-2', BTN[variant], className)}>
     {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}{children}
   </button>
 ));
@@ -35,16 +35,16 @@ export const Card = ({ title, actions, children, className, pad = true }: { titl
   <section className={cx('min-w-0 rounded-lg border border-line bg-white', className)}>
     {(title || actions) && (
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-        <h2 className="text-[15px] font-semibold">{title}</h2><div className="flex items-center gap-2">{actions}</div>
+        <h2 className="text-[15px] font-semibold truncate">{title}</h2><div className="flex shrink-0 items-center gap-2">{actions}</div>
       </header>)}
     <div className={pad ? 'p-4' : ''}>{children}</div>
   </section>
 );
 
 export const PageHeader = ({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) => (
-  <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-    <div><h1 className="text-[22px] font-semibold leading-tight">{title}</h1>{subtitle && <p className="mt-0.5 max-w-3xl text-muted">{subtitle}</p>}</div>
-    <div className="flex flex-wrap items-center gap-2">{actions}</div>
+  <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div className="min-w-0"><h1 className="text-[22px] font-semibold leading-tight">{title}</h1>{subtitle && <p className="mt-0.5 max-w-3xl text-sm text-muted">{subtitle}</p>}</div>
+    <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>
   </div>
 );
 
@@ -78,7 +78,7 @@ export function Query({ q, children, empty }: { q: { isLoading: boolean; error: 
 }
 
 // ------------------------------------------------------------------ forms
-export const inputCls = 'w-full rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-muted/70 focus:border-teal disabled:bg-paper aria-[invalid=true]:border-bad';
+export const inputCls = 'w-full rounded-md border border-line bg-white px-3 py-2 text-ink placeholder:text-muted/70 focus:border-teal focus-visible:outline-2 focus-visible:outline-teal focus-visible:outline-offset-2 disabled:bg-paper aria-[invalid=true]:border-bad transition-colors duration-100';
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => <input ref={ref} {...p} className={cx(inputCls, className)} />);
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(({ className, children, ...p }, ref) => <select ref={ref} {...p} className={cx(inputCls, 'pr-8', className)}>{children}</select>);
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => <textarea ref={ref} rows={3} {...p} className={cx(inputCls, className)} />);
@@ -116,7 +116,7 @@ export function Modal({ title, onClose, children, wide, footer }: { title: strin
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={cx('w-full rounded-lg bg-white shadow-xl', wide ? 'max-w-3xl' : 'max-w-lg')}>
         <header className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 id={titleId} className="text-base font-semibold">{title}</h2>
-          <button data-close aria-label="Close dialog" onClick={onClose} className="rounded p-1 text-muted hover:bg-paper"><X className="h-4 w-4" /></button>
+          <button data-close aria-label="Close dialog" onClick={onClose} className="rounded p-1 text-muted hover:bg-paper min-h-[40px] min-w-[40px] flex items-center justify-center"><X className="h-4 w-4" /></button>
         </header>
         <div className="space-y-4 p-5">{children}</div>
         {footer && <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
@@ -125,15 +125,17 @@ export function Modal({ title, onClose, children, wide, footer }: { title: strin
 }
 
 // ------------------------------------------------------------------ tables
+// fluid=true: no min-width, no horizontal scroll (for narrow summary tables inside cards)
+// fluid=false (default): min-w-[640px] with horizontal scroll wrapper for full data tables
 export const Table = ({ children, className, fluid }: { children: ReactNode; className?: string; fluid?: boolean }) => (
-  <div className={cx('relative overflow-x-auto', className)}><table className={cx('w-full text-left', !fluid && 'min-w-[640px]')}>{children}</table></div>);
+  <div className={cx('relative overflow-x-auto', fluid ? '' : 'table-scroll-x', className)}><table className={cx('w-full text-left', !fluid && 'min-w-[640px]')}>{children}</table></div>);
 
 // Primary label for a document: its descriptive name, with the document ID (and reference number) as secondary text.
 export const DocLabel = ({ name, code, reference, file }: { name?: string | null; code?: string | null; reference?: string | null; file?: string | null }) => (
   <span className="block"><span className="font-medium">{name?.trim() || 'Unnamed Document'}</span>
     <span className="block text-[13px] font-normal text-muted">{[code && `Document ID: ${code}`, reference && `Ref ${reference}`, file].filter(Boolean).join(' · ')}</span></span>);
 export const Th = ({ children, sort, active, dir, onSort, className }: { children?: ReactNode; sort?: string; active?: boolean; dir?: string; onSort?: (k: string) => void; className?: string }) => (
-  <th scope="col" aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : undefined} className={cx('border-b border-line bg-[#f8fafc] px-3 py-2 text-[13px] font-semibold text-muted', className)}>
+  <th scope="col" aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : undefined} className={cx('border-b border-line bg-[#f8fafc] px-3 py-2.5 text-[13px] font-semibold text-muted', className)}>
     {sort && onSort ? <button className="inline-flex items-center gap-1 hover:text-ink" onClick={() => onSort(sort)}>{children}<span aria-hidden className="text-[10px]">{active ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span></button> : children}
   </th>);
 export const Td = ({ children, className, colSpan }: { children?: ReactNode; className?: string; colSpan?: number }) => <td colSpan={colSpan} className={cx('border-b border-line/70 px-3 py-2.5 align-top', className)}>{children}</td>;
@@ -155,7 +157,7 @@ export function Tabs({ tabs, value, onChange }: { tabs: { key: string; label: st
     <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-line">
       {tabs.map(t => (
         <button key={t.key} role="tab" aria-selected={value === t.key} onClick={() => onChange(t.key)}
-          className={cx('whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px] font-medium', value === t.key ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink')}>
+          className={cx('whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px] font-medium transition-colors duration-100', value === t.key ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink')}>
           {t.label}{t.count != null && <span className="ml-1.5 rounded bg-paper px-1.5 text-xs text-muted">{t.count}</span>}
         </button>))}
     </div>);
@@ -191,7 +193,7 @@ export function DeadlineMeter({ daysInStage, daysToDue, status, due, compact }: 
   const color = status === 'overdue' ? 'bg-bad' : status === 'due_soon' ? 'bg-[#d97706]' : 'bg-teal';
   const text = daysToDue < 0 ? `${-daysToDue}d overdue` : daysToDue === 0 ? 'Due today' : `${daysToDue}d left`;
   return (
-    <div className={cx('min-w-[96px]', compact ? 'w-28' : 'w-40')} title={due ? `Deadline ${due}` : undefined}>
+    <div className={cx('min-w-0', compact ? 'w-28' : 'w-40')} title={due ? `Deadline ${due}` : undefined}>
       <div className="h-1.5 overflow-hidden rounded-full bg-[#e3e9f0]" role="img" aria-label={`${text}, ${pct}% of the stage time used`}>
         <div className={cx('h-full rounded-full', color)} style={{ width: `${Math.max(pct, 4)}%` }} />
       </div>

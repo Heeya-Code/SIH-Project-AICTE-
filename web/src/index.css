@@ -20,8 +20,9 @@
   --font-sans: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
 }
 
+html { overflow-x: hidden; }
 html, body, #root { height: 100%; }
-body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 :focus-visible { outline: 2px solid var(--color-teal); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: #cfe3f7; }
 table { border-collapse: collapse; }
@@ -31,3 +32,14 @@ table { border-collapse: collapse; }
 /* Used only by Submission history and Upcoming deadlines. The content still scrolls (wheel, touch, keyboard); only the bar is hidden. */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Table scroll wrapper: shadow hints on sides when content overflows */
+.table-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll-x:has(table) { /* edge shadow hint */
+  background:
+    linear-gradient(to right, white 30%, transparent) left center / 20px 100% no-repeat,
+    linear-gradient(to left,  white 30%, transparent) right center / 20px 100% no-repeat,
+    linear-gradient(to right, var(--color-line), transparent) left center / 6px 100% no-repeat,
+    linear-gradient(to left,  var(--color-line), transparent) right center / 6px 100% no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}

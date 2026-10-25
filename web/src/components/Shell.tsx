@@ -75,7 +75,7 @@ export function Shell() {
         <div className="shrink-0 border-t border-white/10 p-3 text-[12px] text-[#9fb3cc]">Synthetic data only. Not connected to any AICTE system.</div>
       </aside>
       {open && (<div className="fixed inset-0 z-40 flex lg:hidden"><div className="flex h-dvh w-64 flex-col bg-ink">{nav}</div><button aria-label="Close menu" className="flex-1 bg-ink/50" onClick={() => setOpen(false)} /></div>)}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <header className="flex items-center gap-3 border-b border-line bg-white px-4 py-2.5">
           <button className="rounded p-1.5 hover:bg-paper lg:hidden" aria-label="Open menu" onClick={() => setOpen(o => !o)}>{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
           <p className="hidden text-muted sm:block">One platform. Every workflow. Every deadline. Complete accountability.</p>
@@ -87,7 +87,7 @@ export function Shell() {
           </div>
         </header>
         {clock?.simulated && <div role="status" className="bg-warn-soft px-4 py-1.5 text-[13px] text-warn">Demo clock is set to {fmtDate(clock.today)}. Deadlines and reminders follow this simulated date.</div>}
-        <main id="main" className="mx-auto w-full max-w-[1240px] flex-1 px-4 py-6 sm:px-6"><Outlet /></main>
+        <main id="main" className="mx-auto w-full max-w-[1240px] flex-1 overflow-x-hidden px-4 py-6 sm:px-6"><Outlet /></main>
       </div>
       <Assistant />
       <DemoPanel />
