@@ -23,34 +23,42 @@ export default function Dashboard() {
         actions={user!.role === 'institution' ? <Link to="/applications/new"><Button variant="primary">New application</Button></Link> : undefined} />
       <Query q={q}>{(d: any) => (
         <div className="space-y-5">
+          {/* Stat cards: responsive auto-fit grid, min-w-0 prevents overflow */}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {d.cards.map((c: any) => {
-              const inner = (<><p className="text-[13px] text-muted">{c.label}</p>
-                <p className={cx('mt-1 text-[28px] font-semibold leading-none', TONE[c.tone ?? 'neutral'])}>{c.value}</p>{c.hint && <p className="mt-1 text-xs text-muted">{c.hint}</p>}</>);
-              return c.link ? <button key={c.key} onClick={() => nav(c.link)} className="group rounded-lg border border-line bg-white p-4 text-left hover:border-brand/50"><span className="flex justify-between">{inner}<ArrowUpRight className="h-4 w-4 text-muted opacity-0 group-hover:opacity-100" aria-hidden /></span></button>
-                : <div key={c.key} className="rounded-lg border border-line bg-white p-4">{inner}</div>;
+              const inner = (<><p className="text-[13px] text-muted truncate" title={c.label}>{c.label}</p>
+                <p className={cx('mt-1 text-[28px] font-semibold leading-none tabular-nums', TONE[c.tone ?? 'neutral'])}>{c.value}</p>{c.hint && <p className="mt-1 text-xs text-muted">{c.hint}</p>}</>);
+              return c.link ? <button key={c.key} onClick={() => nav(c.link)} className="group min-w-0 rounded-lg border border-line bg-white p-4 text-left hover:border-brand/50"><span className="flex justify-between gap-2">{inner}<ArrowUpRight className="h-4 w-4 shrink-0 text-muted opacity-0 group-hover:opacity-100" aria-hidden /></span></button>
+                : <div key={c.key} className="min-w-0 rounded-lg border border-line bg-white p-4">{inner}</div>;
             })}
           </div>
           {d.health && (
             <Card title="System health">
               <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-good" aria-hidden />Database {d.health.database}</li>
-                <li className="flex items-center gap-2">{d.health.audit_chain === 'intact' ? <CheckCircle2 className="h-4 w-4 text-good" aria-hidden /> : <ShieldAlert className="h-4 w-4 text-bad" aria-hidden />}Audit chain {d.health.audit_chain} ({d.health.audit_events_checked} events)</li>
-                <li>Last job run: {d.health.last_job ? `${d.health.last_job.status}, ${fmtDate(d.health.last_job.at)}` : 'none yet'}</li>
+                <li className="flex items-center gap-2 min-w-0"><CheckCircle2 className="h-4 w-4 shrink-0 text-good" aria-hidden /><span className="truncate">Database {d.health.database}</span></li>
+                <li className="flex items-center gap-2 min-w-0">{d.health.audit_chain === 'intact' ? <CheckCircle2 className="h-4 w-4 shrink-0 text-good" aria-hidden /> : <ShieldAlert className="h-4 w-4 shrink-0 text-bad" aria-hidden />}<span className="truncate">Audit chain {d.health.audit_chain} ({d.health.audit_events_checked} events)</span></li>
+                <li className="truncate">Last job run: {d.health.last_job ? `${d.health.last_job.status}, ${fmtDate(d.health.last_job.at)}` : 'none yet'}</li>
                 <li>{d.health.clock_pinned ? <Badge tone="warn">Simulated date {fmtDate(d.health.clock_today)}</Badge> : <>Clock: real time ({fmtDate(d.health.clock_today)})</>}</li>
               </ul>
             </Card>)}
           {d.charts.length > 0 && <div className="grid gap-4 lg:grid-cols-2">{d.charts.map((c: any) => <Card key={c.key} title={c.title}><NameValueChart data={c.data} type={c.type} /></Card>)}</div>}
+          {/* Lists: two-column grid, vertical scroll only inside cards */}
           <div className="grid gap-4 lg:grid-cols-2">
-            {d.lists.map((l: any) => (
-              <Card key={l.key} title={l.title} pad={false}>
-                {l.rows.length === 0 ? <Empty title={l.empty ?? 'Nothing to show'} /> : (
-                  <Table fluid={['subs', 'deadlines'].includes(l.key)} className={['subs', 'deadlines'].includes(l.key) ? 'no-scrollbar' : 'max-h-[360px]'}><thead><tr>{l.columns.map((c: any) => <Th key={c.key}>{c.label}</Th>)}</tr></thead>
-                    <tbody>{l.rows.map((r: any, i: number) => (
-                      <tr key={i} className={r.link ? 'cursor-pointer hover:bg-paper' : ''} onClick={() => r.link && nav(r.link)}>
-                        {l.columns.map((c: any, j: number) => <Td key={c.key}>{j === 0 && r.link ? <Link className="whitespace-nowrap text-brand hover:underline" to={r.link} onClick={e => e.stopPropagation()}>{String(r[c.key] ?? '–')}</Link> : /^\d{4}-\d{2}-\d{2}$/.test(String(r[c.key])) ? fmtDate(r[c.key]) : String(r[c.key] ?? '–')}</Td>)}
-                      </tr>))}</tbody></Table>)}
-              </Card>))}
+            {d.lists.map((l: any) => {
+              const isFluid = ['subs', 'deadlines'].includes(l.key);
+              const visibleRows = l.rows.slice(0, 8);
+              const hasMore = l.rows.length > 8;
+              return (
+                <Card key={l.key} title={l.title} pad={false}
+                  actions={hasMore ? <Link to="/applications" className="text-[13px] text-brand hover:underline">View all</Link> : undefined}>
+                  {visibleRows.length === 0 ? <Empty title={l.empty ?? 'Nothing to show'} /> : (
+                    <Table fluid={isFluid} className={isFluid ? 'no-scrollbar' : 'max-h-[360px]'}><thead><tr>{l.columns.map((c: any) => <Th key={c.key}>{c.label}</Th>)}</tr></thead>
+                      <tbody>{visibleRows.map((r: any, i: number) => (
+                        <tr key={i} className={r.link ? 'cursor-pointer hover:bg-paper' : ''} onClick={() => r.link && nav(r.link)}>
+                          {l.columns.map((c: any, j: number) => <Td key={c.key}>{j === 0 && r.link ? <Link className="text-brand hover:underline" to={r.link} onClick={e => e.stopPropagation()}>{String(r[c.key] ?? '\u2013')}</Link> : /^\d{4}-\d{2}-\d{2}$/.test(String(r[c.key])) ? fmtDate(r[c.key]) : String(r[c.key] ?? '\u2013')}</Td>)}
+                        </tr>))}</tbody></Table>)}
+                </Card>);
+            })}
           </div>
         </div>)}
       </Query>

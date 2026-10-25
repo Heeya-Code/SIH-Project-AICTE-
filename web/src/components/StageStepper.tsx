@@ -8,7 +8,7 @@ export function StageStepper({ stages, currentStageKey, status, stageDueDate }: 
   return (
     <div className="mb-4 rounded-lg border border-line bg-white p-4 shadow-sm">
       <p className="mb-3 text-[13px] font-medium text-muted uppercase tracking-wider">Workflow progress</p>
-      <ol className="flex items-center gap-2 overflow-x-auto pb-2" aria-label="Application stages">
+      <ol className="flex flex-wrap gap-2" aria-label="Application stages">
         {stages.map((s, idx) => {
           let state: 'completed' | 'current' | 'upcoming' | 'returned' = 'upcoming';
           if (status === 'approved') {
