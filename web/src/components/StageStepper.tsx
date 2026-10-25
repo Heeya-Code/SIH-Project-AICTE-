@@ -33,7 +33,7 @@ export function StageStepper({ stages, currentStageKey, status, stageDueDate }: 
           const isCurrent = state === 'current' || state === 'returned';
 
           return (
-            <li key={s.key} className={`flex min-w-[150px] flex-1 items-center gap-2.5 rounded-md border p-2.5 text-left ${isCurrent ? 'border-brand bg-brand-soft/20' : 'border-line/70 bg-paper/50'}`} aria-current={isCurrent ? 'step' : undefined}>
+            <li key={s.key} className={`flex min-w-[135px] max-w-full flex-1 items-center gap-2.5 rounded-md border p-2.5 text-left ${isCurrent ? 'border-brand bg-brand-soft/20 shadow-xs' : 'border-line/70 bg-paper/50'}`} aria-current={isCurrent ? 'step' : undefined}>
               <div className="shrink-0">
                 {state === 'completed' && <CheckCircle2 className="h-5 w-5 text-good" aria-hidden />}
                 {state === 'current' && <Circle className="h-5 w-5 fill-brand text-brand" aria-hidden />}

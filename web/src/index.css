@@ -18,6 +18,8 @@
   --color-good: #17795a;
   --color-good-soft: #e5f5ee;
   --font-sans: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --shadow-xs: 0 1px 2px 0 rgba(15, 42, 74, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 42, 74, 0.08), 0 1px 2px -1px rgba(15, 42, 74, 0.06);
 }
 
 html { overflow-x: hidden; }
@@ -43,3 +45,4 @@ table { border-collapse: collapse; }
     linear-gradient(to left,  var(--color-line), transparent) right center / 6px 100% no-repeat;
   background-attachment: local, local, scroll, scroll;
 }
+

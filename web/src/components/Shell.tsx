@@ -76,18 +76,18 @@ export function Shell() {
       </aside>
       {open && (<div className="fixed inset-0 z-40 flex lg:hidden"><div className="flex h-dvh w-64 flex-col bg-ink">{nav}</div><button aria-label="Close menu" className="flex-1 bg-ink/50" onClick={() => setOpen(false)} /></div>)}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <header className="flex items-center gap-3 border-b border-line bg-white px-4 py-2.5">
-          <button className="rounded p-1.5 hover:bg-paper lg:hidden" aria-label="Open menu" onClick={() => setOpen(o => !o)}>{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
-          <p className="hidden text-muted sm:block">One platform. Every workflow. Every deadline. Complete accountability.</p>
+        <header className="flex items-center gap-3 border-b border-line bg-white px-4 py-2.5 sm:px-6">
+          <button className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-md p-1.5 hover:bg-paper lg:hidden" aria-label="Open menu" onClick={() => setOpen(o => !o)}>{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
+          <p className="hidden text-sm text-muted sm:block">One platform. Every workflow. Every deadline. Complete accountability.</p>
           <div className="ml-auto flex items-center gap-3">
-            <Link to="/inbox?tab=notifications" className="relative rounded p-1.5 hover:bg-paper" aria-label={`Notifications${unread.data?.unread ? `, ${unread.data.unread} unread` : ''}`}>
-              <Bell className="h-5 w-5" />{!!unread.data?.unread && <span className="absolute -right-0.5 -top-0.5 rounded-full bg-bad px-1 text-[10px] leading-4 text-white">{unread.data.unread}</span>}</Link>
-            <div className="hidden text-right leading-tight sm:block"><p className="font-medium">{user!.name}</p><p className="text-[12px] text-muted">{user!.role_label}{user!.region_name ? `, ${user!.region_name}` : ''}</p></div>
-            <button onClick={logout} aria-label="Sign out" className="flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 hover:bg-paper"><LogOut className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Sign out</span></button>
+            <Link to="/inbox?tab=notifications" className="relative flex min-h-[40px] min-w-[40px] items-center justify-center rounded-md p-1.5 hover:bg-paper" aria-label={`Notifications${unread.data?.unread ? `, ${unread.data.unread} unread` : ''}`}>
+              <Bell className="h-5 w-5 text-muted hover:text-ink" />{!!unread.data?.unread && <span className="absolute 1 -top-0.5 rounded-full bg-bad px-1.5 text-[10px] font-semibold leading-4 text-white">{unread.data.unread}</span>}</Link>
+            <div className="hidden text-right leading-tight sm:block"><p className="text-sm font-medium text-ink">{user!.name}</p><p className="text-[12px] text-muted">{user!.role_label}{user!.region_name ? `, ${user!.region_name}` : ''}</p></div>
+            <button onClick={logout} aria-label="Sign out" className="flex min-h-[40px] items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm font-medium hover:bg-paper transition-colors"><LogOut className="h-4 w-4 text-muted" aria-hidden /><span className="hidden sm:inline">Sign out</span></button>
           </div>
         </header>
-        {clock?.simulated && <div role="status" className="bg-warn-soft px-4 py-1.5 text-[13px] text-warn">Demo clock is set to {fmtDate(clock.today)}. Deadlines and reminders follow this simulated date.</div>}
-        <main id="main" className="mx-auto w-full max-w-[1240px] flex-1 overflow-x-hidden px-4 py-6 sm:px-6"><Outlet /></main>
+        {clock?.simulated && <div role="status" className="bg-warn-soft px-4 py-1.5 text-[13px] text-warn border-b border-warn/20">Demo clock is set to {fmtDate(clock.today)}. Deadlines and reminders follow this simulated date.</div>}
+        <main id="main" className="mx-auto w-full max-w-[1280px] flex-1 overflow-x-hidden px-4 py-6 sm:px-6 lg:px-8"><Outlet /></main>
       </div>
       <Assistant />
       <DemoPanel />
