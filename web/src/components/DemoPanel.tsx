@@ -15,9 +15,8 @@ export function DemoPanel() {
   const [open, setOpen] = useState(false);
   const [jobResult, setJobResult] = useState<string | null>(null);
 
-  const sys = useQuery({ queryKey: ['system'], queryFn: () => api<any>('/admin/system') });
-
-  if (user?.role !== 'admin' || !sys.data?.demo_tools) return null;
+  const isAdmin = user?.role === 'admin';
+  const sys = useQuery({ queryKey: ['system'], queryFn: () => api<any>('/admin/system'), enabled: isAdmin });
 
   const clock = lookups.data?.clock;
 
@@ -41,6 +40,9 @@ export function DemoPanel() {
     },
     onError: e => toast.err(errMsg(e)),
   });
+
+  // Every hook above runs on every render. Returning earlier than this crashed the whole app for the admin account (React error #310).
+  if (!isAdmin || !sys.data?.demo_tools) return null;
 
   return (
     <div className="fixed bottom-3 left-3 z-50">

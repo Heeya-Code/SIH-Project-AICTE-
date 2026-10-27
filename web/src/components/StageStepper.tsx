@@ -10,6 +10,8 @@ export function StageStepper({ stages, currentStageKey, status, stageDueDate }: 
       <p className="mb-3 text-[13px] font-medium text-muted uppercase tracking-wider">Workflow progress</p>
       <ol className="flex flex-wrap gap-2" aria-label="Application stages">
         {stages.map((s, idx) => {
+          // Side paths (a clarification loop, rejection, withdrawal) are shown only when the case is actually there, so a normal case reads as a straight line.
+          if ((s.is_terminal && s.key !== 'approved' && s.key !== currentStageKey) || (s.responsible_role === 'institution' && s.key !== currentStageKey)) return null;
           let state: 'completed' | 'current' | 'upcoming' | 'returned' = 'upcoming';
           if (status === 'approved') {
             state = 'completed';
@@ -50,6 +52,7 @@ export function StageStepper({ stages, currentStageKey, status, stageDueDate }: 
           );
         })}
       </ol>
+      <p className="mt-3 text-[12px] text-muted">A clarification request, a rejection or a withdrawal appears here only if it happens to this case.</p>
     </div>
   );
 }

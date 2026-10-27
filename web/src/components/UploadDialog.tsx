@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { uploadWithProgress } from '../lib/api';
+import { useUnsavedWarning } from '../lib/hooks';
 import { Button, ErrorBox, Field, Input, Modal, Select, useToast } from './ui';
 
 export type DocOption = { doc_type: string; has_expiry: boolean; display_name?: string };
@@ -22,10 +23,11 @@ type F = z.infer<typeof schema>;
 
 export function UploadDialog({ applicationId, options, renewOf, defaultType, onClose }: { applicationId?: number; options?: DocOption[]; renewOf?: { id: number; doc_type: string; display_name?: string; has_expiry?: boolean }; defaultType?: string; onClose: () => void }) {
   const qc = useQueryClient(); const toast = useToast();
-  const [error, setError] = useState<unknown>(null);
+  const [error, setError] = useState<unknown>(null); const [pct, setPct] = useState<number | null>(null);
   const opts = renewOf ? [{ doc_type: renewOf.doc_type, display_name: renewOf.display_name, has_expiry: true }] : (options ?? []);
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<F>({ resolver: zodResolver(schema), defaultValues: { doc_type: renewOf?.doc_type ?? defaultType ?? '', expiryRequired: false } });
-  const type = watch('doc_type');
+  const { register, handleSubmit, watch, formState: { errors, isDirty } } = useForm<F>({ resolver: zodResolver(schema), defaultValues: { doc_type: renewOf?.doc_type ?? defaultType ?? '', expiryRequired: false } });
+  const type = watch('doc_type'); useUnsavedWarning(isDirty && pct === null);
+  const close = () => { if (isDirty && pct === null && !confirm('Discard this upload? What you entered will be lost.')) return; onClose(); };
   const hasExpiry = !!opts.find(o => o.doc_type === type)?.has_expiry || !!renewOf;
   const m = useMutation({
     mutationFn: async (v: F) => {
@@ -33,15 +35,15 @@ export function UploadDialog({ applicationId, options, renewOf, defaultType, onC
       fd.set('doc_type', v.doc_type); if (applicationId) fd.set('application_id', String(applicationId)); if (renewOf) fd.set('renew_of', String(renewOf.id));
       if (v.reference_no) fd.set('reference_no', v.reference_no); if (v.issue_date) fd.set('issue_date', v.issue_date); if (v.expiry_date) fd.set('expiry_date', v.expiry_date);
       fd.set('file', v.file[0]);
-      return api('/documents', { form: fd });
+      setPct(0); return uploadWithProgress('/documents', fd, setPct);
     },
     onSuccess: () => { toast.ok(renewOf ? 'Renewed document uploaded as a new version' : 'Document uploaded'); qc.invalidateQueries(); onClose(); },
-    onError: setError,
+    onError: e => { setPct(null); setError(e); },
   });
   const submit = handleSubmit(v => { setError(null); m.mutate({ ...v, expiryRequired: hasExpiry }); });
   return (
-    <Modal title={renewOf ? `Renew ${renewOf.display_name ?? renewOf.doc_type}` : 'Upload a document'} onClose={onClose}
-      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" busy={m.isPending} onClick={submit}>Upload</Button></>}>
+    <Modal title={renewOf ? `Renew ${renewOf.display_name ?? renewOf.doc_type}` : 'Upload a document'} onClose={close}
+      footer={<><Button onClick={close}>Cancel</Button><Button variant="primary" busy={m.isPending} onClick={submit}>{m.isPending ? 'Uploading…' : 'Upload'}</Button></>}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         {renewOf && <p className="rounded-md bg-brand-soft p-3 text-[13px]">The earlier version is kept for reference. The new file becomes the current version and goes back to the reviewer for verification.</p>}
         <Field label="Document type" error={errors.doc_type?.message} required>{(id, d) => (
@@ -52,7 +54,8 @@ export function UploadDialog({ applicationId, options, renewOf, defaultType, onC
           <Field label="Expiry date" error={errors.expiry_date?.message} required={hasExpiry} hint={hasExpiry ? undefined : 'Leave empty if this document does not expire.'}>{(id, d) => <Input id={id} aria-describedby={d} aria-invalid={!!errors.expiry_date} type="date" {...register('expiry_date')} />}</Field>
         </div>
         <Field label="File (PDF, PNG or JPEG, up to 5 MB)" error={errors.file?.message as string} required>{(id, d) => <Input id={id} aria-describedby={d} aria-invalid={!!errors.file} type="file" accept=".pdf,.png,.jpg,.jpeg" {...register('file')} />}</Field>
-        {!!error && <ErrorBox error={error} />}
+        {pct !== null && m.isPending && <div role="progressbar" aria-label="Upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><div className="h-2 overflow-hidden rounded-full bg-[#e3e9f0]"><div className="h-full bg-brand transition-all" style={{ width: `${pct}%` }} /></div><p className="mt-1 text-[13px] text-muted">{pct < 100 ? `Uploading… ${pct}%` : 'Upload complete. Saving…'}</p></div>}
+        {!!error && <ErrorBox error={error} onRetry={submit} />}
       </form>
     </Modal>);
 }

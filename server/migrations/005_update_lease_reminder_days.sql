@@ -1,2 +1,4 @@
--- Update Lease Deed reminder days to [30,7,1] for test compatibility (migration 005)
-UPDATE document_requirements SET reminder_days='[30,7,1]' WHERE doc_type LIKE '%Lease Deed%';
+-- Intentionally empty.
+-- This migration used to overwrite the Lease Deed reminder schedule with [30,7,1] "for test compatibility", which made existing databases
+-- behave differently from freshly seeded ones. The schedule now comes only from the seed ([180,90,30]) or from an administrator's edit.
+SELECT 1;

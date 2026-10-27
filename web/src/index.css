@@ -1,48 +1,179 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 @theme {
-  --color-ink: #0f2a4a;
-  --color-ink-2: #1b3d66;
-  --color-brand: #1d5fa8;
-  --color-brand-dark: #164a85;
-  --color-brand-soft: #e8f0fa;
-  --color-teal: #0f8b8d;
-  --color-teal-soft: #e3f4f4;
-  --color-paper: #f4f6f9;
-  --color-line: #dbe2ea;
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Nirmala UI", "Noto Sans", "Mukta", system-ui, sans-serif;
+  --color-navy: #0B1B3B;
+  --color-navy-hover: #14305F;
+  --color-primary: #2F5BEA;
+  --color-primary-dark: #2449C7;
+  --color-primary-soft: #EEF3FF;
+  --color-saffron: #F59E0B;
+  --color-saffron-soft: #FFF4DB;
+  --color-paper: #F5F7FB;
+  --color-surface: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-divider: #EEF2F7;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94A3B8;
+  --color-success: #15803D;
+  --color-success-soft: #E8F7EE;
+  --color-warning: #B45309;
+  --color-warning-soft: #FFF4E0;
+  --color-danger: #B91C1C;
+  --color-danger-soft: #FDECEC;
+  --color-info: #0369A1;
+  --color-info-soft: #E6F4FB;
+  --color-neutral: #475569;
+  --color-neutral-soft: #EEF2F7;
+  /* Names the components use (bg-brand, text-ink, border-line, text-muted, bg-good-soft...) mapped onto the Civic Clarity palette above.
+     Without these, those classes generate no CSS: buttons became white-on-white and borders turned black. */
+  --color-ink: #0B1B3B;
+  --color-ink-2: #14305F;
+  --color-brand: #2F5BEA;
+  --color-brand-dark: #2449C7;
+  --color-brand-soft: #EEF3FF;
+  --color-line: #E2E8F0;
   --color-muted: #566579;
-  --color-warn: #a74b07;
-  --color-warn-soft: #fdf1e3;
-  --color-bad: #b42318;
-  --color-bad-soft: #fdecea;
-  --color-good: #17795a;
-  --color-good-soft: #e5f5ee;
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
-  --shadow-xs: 0 1px 2px 0 rgba(15, 42, 74, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(15, 42, 74, 0.08), 0 1px 2px -1px rgba(15, 42, 74, 0.06);
+  --color-teal: #0E7C86;
+  --color-teal-soft: #E3F4F4;
+  --color-good: #15803D;
+  --color-good-soft: #E8F7EE;
+  --color-warn: #B45309;
+  --color-warn-soft: #FFF4E0;
+  --color-bad: #B91C1C;
+  --color-bad-soft: #FDECEC;
+  --shadow-card: 0 1px 2px rgba(15,23,42,.04), 0 6px 20px rgba(15,23,42,.06);
 }
 
 html { overflow-x: hidden; }
 html, body, #root { height: 100%; }
-body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-:focus-visible { outline: 2px solid var(--color-teal); outline-offset: 2px; border-radius: 4px; }
-::selection { background: #cfe3f7; }
+body {
+  background: var(--color-paper);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "tnum" on, "lnum" on;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: 4px; }
+::selection { background: var(--color-primary-soft); color: var(--color-primary); }
 table { border-collapse: collapse; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .react-flow__attribution { display: none; }
 
-/* Used only by Submission history and Upcoming deadlines. The content still scrolls (wheel, touch, keyboard); only the bar is hidden. */
-.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-
-/* Table scroll wrapper: shadow hints on sides when content overflows */
 .table-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.table-scroll-x:has(table) { /* edge shadow hint */
+.table-scroll-x:has(table) {
   background:
     linear-gradient(to right, white 30%, transparent) left center / 20px 100% no-repeat,
     linear-gradient(to left,  white 30%, transparent) right center / 20px 100% no-repeat,
-    linear-gradient(to right, var(--color-line), transparent) left center / 6px 100% no-repeat,
-    linear-gradient(to left,  var(--color-line), transparent) right center / 6px 100% no-repeat;
+    linear-gradient(to right, var(--color-border), transparent) left center / 6px 100% no-repeat,
+    linear-gradient(to left,  var(--color-border), transparent) right center / 6px 100% no-repeat;
   background-attachment: local, local, scroll, scroll;
 }
 
+/* links inside running text must be distinguishable without colour */
+main p a, main li a, main dd a, main label a { text-decoration: underline; text-underline-offset: 2px; }
+.skeleton { background: linear-gradient(90deg, #eaeef3 25%, #f4f6f9 50%, #eaeef3 75%); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: 4px; }
+@keyframes sk { to { background-position: -200% 0; } }
+
+body {
+  background-image:
+    radial-gradient(ellipse at 92% 0%, rgba(47, 91, 234, .055), transparent 34rem),
+    radial-gradient(ellipse at 0% 40%, rgba(14, 124, 134, .035), transparent 28rem);
+}
+
+.app-sidebar {
+  background: linear-gradient(165deg, #102750 0%, #0B1B3B 48%, #08152f 100%);
+}
+
+.app-brand-mark {
+  background: linear-gradient(145deg, #5278ff, #2F5BEA 58%, #2147c9);
+  box-shadow: 0 6px 18px rgba(47, 91, 234, .35), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+
+.app-topbar {
+  background: rgba(255, 255, 255, .9);
+  backdrop-filter: blur(14px);
+}
+
+.polished-card {
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .035), 0 8px 26px rgba(15, 23, 42, .045);
+}
+
+.landing-hero {
+  background:
+    radial-gradient(ellipse at 78% 45%, rgba(47, 91, 234, .30), transparent 34rem),
+    radial-gradient(ellipse at 12% 100%, rgba(14, 124, 134, .18), transparent 30rem),
+    linear-gradient(135deg, #08152f 0%, #0B1B3B 54%, #102750 100%);
+}
+
+.landing-title {
+  text-wrap: balance;
+  text-shadow: 0 3px 28px rgba(0, 0, 0, .16);
+}
+
+.landing-step,
+.landing-role {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.landing-step:hover,
+.landing-role:hover {
+  transform: translateY(-3px);
+  border-color: rgba(47, 91, 234, .45);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .09);
+}
+
+.dashboard-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 94% 0%, rgba(47, 91, 234, .12), transparent 22rem),
+    linear-gradient(115deg, #eef3ff 0%, #fff 62%, #f8fbff 100%);
+  box-shadow: 0 8px 24px rgba(28, 54, 105, .055);
+}
+
+.dashboard-hero::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 7rem;
+  height: 3px;
+  border-radius: 999px 0 0;
+  background: linear-gradient(90deg, #f59e0b, #2f5bea);
+  content: "";
+}
+
+.dashboard-stat {
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dashboard-stat:hover {
+  transform: translateY(-2px);
+  border-color: rgba(47, 91, 234, .32);
+  box-shadow: 0 12px 28px rgba(28, 54, 105, .09);
+}
+
+.btn-vibe {
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.btn-vibe:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, .12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-step,
+  .landing-role,
+  .dashboard-stat,
+  .btn-vibe { transition: none; }
+  .landing-step:hover,
+  .landing-role:hover,
+  .dashboard-stat:hover,
+  .btn-vibe:hover:not(:disabled) { transform: none; }
+}

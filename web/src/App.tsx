@@ -4,6 +4,7 @@ import { useAuth } from './lib/auth';
 import { Shell, NAV } from './components/Shell';
 import { Spinner } from './components/ui';
 import Login from './pages/Login';
+import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import { ApplicationList, ApplicationNew } from './pages/Applications';
 import ApplicationDetail from './pages/ApplicationDetail';
@@ -26,7 +27,7 @@ const WorkflowDesigner = lazy(() => import('./pages/WorkflowDesigner'));
 export default function App() {
   const { user, loading } = useAuth();
   if (loading) return <Spinner label="Restoring your session" />;
-  if (!user) return <Routes><Route path="*" element={<Login />} /></Routes>;
+  if (!user) return <Routes><Route path="/" element={<Landing />} /><Route path="/login" element={<Login />} /><Route path="*" element={<Navigate to="/login" replace />} /></Routes>;
   const allowed = (path: string) => NAV.find(n => n.to === path)?.roles.includes(user.role);
   const guard = (path: string, el: JSX.Element) => (allowed(path) ? el : <Navigate to="/" replace />);
   return (

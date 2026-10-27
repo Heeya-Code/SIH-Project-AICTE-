@@ -133,6 +133,14 @@ describe('uploads', () => {
   });
 });
 
+describe('browser security headers', () => {
+  it('allows in-page previews from blob: URLs but nothing broader, and keeps the other protections', async () => {
+    const r = await request(ctx.app).get('/api/health'); const csp = r.headers['content-security-policy'] as string;
+    expect(csp).toMatch(/frame-src 'self' blob:/); expect(csp).toMatch(/img-src 'self' data: blob:/); expect(csp).toMatch(/default-src 'self'/); expect(csp).toMatch(/object-src 'none'/); expect(csp).not.toMatch(/script-src[^;]*unsafe/);
+    expect(r.headers['x-content-type-options']).toBe('nosniff'); expect(r.headers['x-powered-by']).toBeUndefined();
+  });
+});
+
 describe('error handling does not leak internals', () => {
   it('returns structured errors without stack traces or SQL', async () => {
     const a = await ctx.as('inst1@demo.local');

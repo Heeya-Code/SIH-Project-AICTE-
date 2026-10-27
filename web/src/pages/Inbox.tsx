@@ -24,7 +24,7 @@ export function Notifications({ embedded }: { embedded?: boolean }) {
           <><ul>{d.rows.map((n: any) => (
             <li key={n.id} className={`flex flex-wrap items-start justify-between gap-3 border-b border-line/70 px-4 py-3 ${n.read_at ? '' : 'bg-brand-soft/40'}`}>
               <div className="min-w-0 flex-1">
-                <p className="font-medium">{!n.read_at && <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-brand" aria-label="Unread" />}{n.title}</p>
+                <p className="font-medium">{!n.read_at && <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-brand" role="img" aria-label="Unread" />}{n.title}</p>
                 <p className="text-muted">{n.body}</p>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">{fmtDateTime(n.created_at)}
                   {n.deliveries.filter((x: any) => x.channel === 'email').map((x: any, i: number) => <Badge key={i} tone={toneFor(x.status)} title={x.last_error ?? undefined}>Email: {pretty(x.status)}{x.attempts > 1 ? ` (${x.attempts} tries)` : ''}</Badge>)}

@@ -14,7 +14,9 @@ import { addDocument, verifyDocument } from '../documents';
 import { createUndertaking, effectiveStatus, reviewUndertaking, submitEvidence } from '../compliance';
 import { completeEvc, evcState, rescheduleEvc, scheduleEvc, suggestSlots } from '../evc';
 import { stripStorage } from './applications';
+import { docName, docCode } from '../docnames';
 import { notifyRole } from '../notify';
+import { documentSampleCatalog, renderSamplePdf } from '../sample-documents';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.maxUploadBytes, files: 1 } });
 const optInt = z.preprocess(v => (v === '' || v == null ? undefined : Number(v)), z.number().int().positive().optional());
@@ -34,6 +36,19 @@ function sendFile(res: any, file: { file_name: string; storage_ref: string; mime
 // ---------------------------------------------------------------- documents
 export function documentsRouter(db: DB) {
   const r = Router();
+  r.get('/samples', h((_req, res) => res.json({ rows: documentSampleCatalog(db) })));
+  r.get('/samples/download', h(async (req, res) => {
+    const docType = typeof req.query.doc_type === 'string' ? req.query.doc_type : '';
+    const sample = documentSampleCatalog(db).find(x => x.doc_type === docType);
+    if (!sample) throw notFound('Sample document type not found');
+    const pdf = await renderSamplePdf(sample.doc_type);
+    audit(db, { actor: actorOf(req.user!), type: 'document.sample_downloaded', entity: 'document_sample', entityId: sample.doc_type });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${sample.file_name}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.end(pdf);
+  }));
   r.get('/', h((req, res) => {
     const user = req.user!, p = paging(req), s = scope(user, 'd'), today = clock.today();
     const where = [s.sql], params: any[] = [...s.params];
@@ -88,6 +103,18 @@ export function documentsRouter(db: DB) {
   r.get('/:id/download', h((req, res) => {
     const d = load(req.user!, intParam(req.params.id));
     audit(db, { actor: actorOf(req.user!), type: 'document.downloaded', entity: 'document', entityId: d.id });
+    if (d.synthetic) {
+      const meta = db.prepare(`SELECT i.name AS institution_name, a.ref AS application_ref FROM institutions i
+        LEFT JOIN applications a ON a.id=? WHERE i.id=?`).get(d.application_id, d.institution_id) as any;
+      return renderSamplePdf(d.doc_type, { ...meta, reference_no: d.reference_no, issue_date: d.issue_date, expiry_date: d.expiry_date, verification_status: d.verification_status })
+        .then(pdf => {
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="${d.file_name.replace(/"/g, '')}"`);
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          res.setHeader('Cache-Control', 'private, no-store');
+          res.end(pdf);
+        });
+    }
     sendFile(res, d);
   }));
   r.post('/:id/verify', h((req, res) => {
@@ -259,8 +286,21 @@ export function notificationsRouter(db: DB) {
     if (qs(req.query.unread) === '1') where.push('n.read_at IS NULL');
     if (qs(req.query.pending_ack) === '1') where.push('n.ack_required=1 AND n.acked_at IS NULL');
     const total = (db.prepare(`SELECT COUNT(*) c FROM notifications n WHERE ${where.join(' AND ')}`).get(...params) as any).c;
+    const related = (n: any): string | null => {
+      if (!n.entity_id) return null;
+      const q = (sql: string) => (db.prepare(sql).get(n.entity_id) as any)?.v ?? null;
+      switch (n.entity_type) {
+        case 'application': return q('SELECT ref v FROM applications WHERE id=?');
+        case 'task': return q('SELECT a.ref v FROM tasks t JOIN applications a ON a.id=t.application_id WHERE t.id=?');
+        case 'evc': return q('SELECT a.ref v FROM evc_schedules e JOIN applications a ON a.id=e.application_id WHERE e.id=?');
+        case 'undertaking': return q('SELECT code v FROM undertakings WHERE id=?');
+        case 'document': { const t = q('SELECT doc_type v FROM documents WHERE id=?'); return t ? `${docName(t)} (${docCode(n.entity_id)})` : null; }
+        default: return null;
+      }
+    };
+    const URGENT = new Set(['task.overdue', 'evc.overdue', 'compliance.overdue', 'document.expired', 'escalation.triggered']);
     const rows = (db.prepare(`SELECT n.* FROM notifications n WHERE ${where.join(' AND ')} ORDER BY n.id DESC LIMIT ? OFFSET ?`).all(...params, p.pageSize, p.offset) as any[]).map(n => ({
-      ...n, deliveries: db.prepare('SELECT channel,status,attempts,last_error FROM notification_deliveries WHERE notification_id=?').all(n.id) }));
+      ...n, related: related(n), urgency: n.ack_required && !n.acked_at ? 'action' : URGENT.has(n.event) ? 'urgent' : 'update', deliveries: db.prepare('SELECT channel,status,attempts,last_error FROM notification_deliveries WHERE notification_id=?').all(n.id) }));
     res.json(paged(rows, total, p));
   }));
   r.get('/unread-count', h((req, res) => res.json({

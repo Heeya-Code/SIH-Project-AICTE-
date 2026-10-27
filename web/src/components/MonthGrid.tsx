@@ -22,23 +22,27 @@ export function MonthGrid({ month, onMonth, events, today }: { month: string; on
   }, [month]);
   const by = useMemo(() => { const g: Record<string, CalEvent[]> = {}; for (const e of events) (g[e.date] ??= []).push(e); return g; }, [events]);
   return (
-    <div>
+    <div className="min-w-0 max-w-full">
       <div className="mb-3 flex items-center gap-2">
         <Button size="sm" aria-label="Previous month" onClick={() => onMonth(shiftMonth(month, -1))}><ChevronLeft className="h-4 w-4" /></Button>
         <h3 className="min-w-[150px] text-center font-semibold" aria-live="polite">{label}</h3>
         <Button size="sm" aria-label="Next month" onClick={() => onMonth(shiftMonth(month, 1))}><ChevronRight className="h-4 w-4" /></Button>
         <Button size="sm" variant="ghost" onClick={() => onMonth(today.slice(0, 7))}>Today</Button>
       </div>
-      <div className="overflow-x-auto"><div className="grid min-w-[700px] grid-cols-7 border-l border-t border-line bg-white text-[12px]" role="grid" aria-label={label}>
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d} role="columnheader" className="border-b border-r border-line bg-[#f8fafc] px-2 py-1.5 font-semibold text-muted">{d}</div>)}
-        {cells.map((c, i) => (
-          <div key={i} role="gridcell" className={cx('min-h-[92px] border-b border-r border-line p-1', !c && 'bg-[#fafbfc]', c === today && 'bg-teal-soft/50')}>
-            {c && <p className={cx('mb-0.5 px-1 text-right', c === today ? 'font-bold text-[#0b6769]' : 'text-muted')}>{Number(c.slice(8))}</p>}
-            {c && (by[c] ?? []).slice(0, 3).map((e, j) => {
-              const cls = cx('mb-0.5 block truncate rounded px-1.5 py-0.5', TONE[e.tone]);
-              return e.link ? <Link key={j} to={e.link} title={e.title} className={cls}>{e.title}</Link> : <span key={j} title={e.title} className={cls}>{e.title}</span>; })}
-            {c && (by[c]?.length ?? 0) > 3 && <p className="px-1 text-muted">+{by[c].length - 3} more</p>}
-          </div>))}
-      </div></div>
+      <div tabIndex={0} role="region" aria-label={`${label}, calendar`} className="relative overflow-x-auto">
+        <table className="w-full min-w-[700px] table-fixed border-collapse border border-line bg-white text-[12px]">
+          <caption className="sr-only">{label}</caption>
+          <thead><tr>{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <th key={d} scope="col" className="border border-line bg-[#f8fafc] px-2 py-1.5 text-left font-semibold text-muted">{d}</th>)}</tr></thead>
+          <tbody>{Array.from({ length: cells.length / 7 }, (_, r) => (
+            <tr key={r}>{cells.slice(r * 7, r * 7 + 7).map((c, k) => (
+              <td key={k} className={cx('h-[92px] border border-line p-1 align-top', !c && 'bg-[#fafbfc]', c === today && 'bg-teal-soft/50')}>
+                {c && <p className={cx('mb-0.5 px-1 text-right', c === today ? 'font-bold text-[#0b6769]' : 'text-muted')}><span className="sr-only">{c}{c === today ? ' (today)' : ''}</span><span aria-hidden>{Number(c.slice(8))}</span></p>}
+                {c && (by[c] ?? []).slice(0, 3).map((e, j) => {
+                  const cls = cx('mb-0.5 block truncate rounded px-1.5 py-0.5', TONE[e.tone]);
+                  return e.link ? <Link key={j} to={e.link} title={e.title} className={cls}>{e.title}</Link> : <span key={j} title={e.title} className={cls}>{e.title}</span>; })}
+                {c && (by[c]?.length ?? 0) > 3 && <p className="px-1 text-muted">+{by[c].length - 3} more</p>}
+              </td>))}</tr>))}</tbody>
+        </table>
+      </div>
     </div>);
 }

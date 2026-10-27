@@ -78,6 +78,7 @@ describe('documents, renewals and expiry', () => {
   };
 
   it('sends configurable advance reminders once per interval, then expiry notices and escalation', async () => {
+    ctx.db.prepare(`UPDATE document_requirements SET reminder_days=NULL, auto_renewal=0 WHERE doc_type='Lease Deed'`).run();      // use the global schedule [30,7,1] for this test
     const docId = await lease('2026-04-15');
     setNow('2026-03-20T04:30:00Z'); await runJobs(ctx.db, 'test'); await runJobs(ctx.db, 'test');
     expect(count(ctx.db, `SELECT COUNT(*) c FROM notifications WHERE event='document.expiry_approaching'`)).toBe(1);          // 30-day bucket, one institution user
@@ -139,7 +140,13 @@ describe('documents, renewals and expiry', () => {
     const r = await upload(ctx, 'inst1@demo.local', { renew_of: String(docId), expiry_date: '2029-04-15', issue_date: '2026-04-16', reference_no: 'LEASE-NEW' });
     expect(r.status).toBe(201);
 
-    const updatedUnd = ctx.db.prepare(`SELECT status FROM undertakings WHERE id=?`).get(und.id) as any;
-    expect(updatedUnd.status).toBe('closed');
+    // the renewed upload is evidence: it is submitted for an officer, never closed or verified automatically
+    expect(ctx.db.prepare(`SELECT status FROM undertakings WHERE id=?`).get(und.id)).toEqual({ status: 'submitted' });
+    const sub = ctx.db.prepare(`SELECT note, review_status FROM compliance_submissions WHERE undertaking_id=?`).get(und.id) as any;
+    expect(sub.review_status).toBe('pending'); expect(sub.note).toMatch(/Renewed Lease Agreement uploaded \(DOC-\d{4}, version 2\)/);
+    const ro = await ctx.as('ro.nr@demo.local');
+    expect((await ro.post(`/api/undertakings/${und.id}/review`, { decision: 'verify', note: 'Renewed lease checked' })).status).toBe(200);
+    expect((await ro.post(`/api/undertakings/${und.id}/review`, { decision: 'close' })).status).toBe(200);
+    expect(ctx.db.prepare(`SELECT status FROM undertakings WHERE id=?`).get(und.id)).toEqual({ status: 'closed' });
   });
 });

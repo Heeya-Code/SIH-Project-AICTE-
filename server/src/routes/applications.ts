@@ -7,13 +7,14 @@ import { clock } from '../clock';
 import { addCalendarDays, notFound, forbidden, getNumberSetting } from '../util';
 import { actorOf, audit } from '../audit';
 import {
-  addObservation, ageInfo, availableActions, createApplication, loadDefinition, performTransition, requiredDocs, submitApplication, updateDraft,
+  PREREQUISITES, addObservation, ageInfo, availableActions, checkPrerequisites, createApplication, loadDefinition, performTransition, requiredDocs, submitApplication, updateDraft,
 } from '../workflow';
 import { effectiveStatus } from '../compliance';
 import { evcState } from '../evc';
 import { pendencyForecast } from '../insights';
 import { docName, docCode, withDocLabels, submissionDocs } from '../docnames';
 
+export const APP_QUERY_LIMIT = 6;
 const SORTS: Record<string, string> = {
   ref: 'a.ref', institution: 'i.name', submitted: 'a.submitted_at', due: 'a.stage_due_date', stage: 'a.current_stage', status: 'a.status', updated: 'a.updated_at', category: 'a.category_code',
 };
@@ -88,6 +89,9 @@ export function applicationsRouter(db: DB) {
       evc,
       deficiencies: db.prepare(`SELECT d.*, u.name AS raised_by_name, r.code AS rule_code FROM deficiencies d LEFT JOIN users u ON u.id=d.raised_by LEFT JOIN regulatory_rules r ON r.id=d.rule_id WHERE d.application_id=? ORDER BY d.id DESC`).all(id),
       synthetic: !!a.synthetic,
+      stage_summary: stageSummary(db, a, def, stage),
+      next_steps: def && stage ? def.transitions.filter(t => t.from_key === stage.key).map(t => ({ action: t.action, label: t.label ?? t.action, role: t.allowed_role ?? stage.responsible_role, automatic: !!t.auto, requires_reason: !!t.requires_reason, to_stage_name: def.stages.find(s => s.key === t.to_key)?.name ?? t.to_key, requirements: t.prerequisites.map((p: string) => PREREQUISITES[p] ?? p) })) : [],
+      readiness: readiness(db, a),
       deadline_risk: a.status === 'in_progress' && a.stage_due_date ? (pendencyForecast(db, user, id).rows[0] ?? null) : null,
       undertakings: (db.prepare('SELECT * FROM undertakings WHERE application_id=? ORDER BY due_date').all(id) as any[]).map(u => ({ ...u, effective_status: effectiveStatus(db, u, today) })),
       observations: inst ? [] : db.prepare(`SELECT o.*, u.name AS author_name FROM observations o JOIN users u ON u.id=o.author_id WHERE o.application_id=? ORDER BY o.id DESC`).all(id),
@@ -174,3 +178,33 @@ export function applicationsRouter(db: DB) {
 export const stripStorage = (d: any) => { const { storage_ref, ...rest } = d; return withDocLabels(rest); };
 void forbidden;
 
+function stageSummary(db: DB, a: any, def: any, stage: any) {
+  if (a.status === 'draft') return { name: 'Draft', responsible_role: 'institution', assignee: null, pending_action: 'Finish the details, upload every required document, then review and submit.', waiting_on: 'your institution' };
+  if (!stage) return null;
+  const task = db.prepare(`SELECT t.title, u.name AS who FROM tasks t LEFT JOIN users u ON u.id=t.assigned_user_id WHERE t.application_id=? AND t.status='open' ORDER BY t.id DESC LIMIT 1`).get(a.id) as any;
+  // The main way forward is the first manual transition that is not a return, rejection or withdrawal. Say what is still missing before it can be taken.
+  const forward = def?.transitions.find((t: any) => t.from_key === stage.key && !t.auto && !['return', 'reject', 'withdraw'].includes(t.action));
+  const unmet = forward ? checkPrerequisites(db, a, forward.prerequisites).filter(p => !p.met).map(p => p.label.charAt(0).toLowerCase() + p.label.slice(1)) : [];
+  const lc = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
+  const way = forward ? (unmet.length ? `Before this can move on: ${unmet.join('; ')}. Then ${lc(forward.label ?? forward.action)}.` : `Ready for the next step: ${lc(forward.label ?? forward.action)}.`) : null;
+  const terminal = !!stage.is_terminal;
+  return { name: stage.name, responsible_role: stage.responsible_role, assignee: task?.who ?? null, waiting_on: terminal ? null : stage.responsible_role.replace(/_/g, ' '), terminal,
+    pending_action: terminal ? `Finished: ${a.status}.` : stage.responsible_role === 'institution' ? 'Respond to the clarification request and resubmit.' : stage.is_evc ? 'Schedule the expert visit, then record it once it has happened.' : way ?? (task ? task.title : 'Waiting for the responsible role.') };
+}
+
+// "Ready to submit" means exactly: every required document is uploaded and none was returned. It does NOT mean the documents are verified or the application will be approved.
+function readiness(db: DB, a: any) {
+  const docs = requiredDocs(db, a).map(r => {
+    const d = r.document_id ? (db.prepare('SELECT verification_note, version FROM documents WHERE id=?').get(r.document_id) as any) : null;
+    const state = !r.uploaded ? 'missing' : r.verification_status === 'returned' ? 'returned' : r.verification_status === 'verified' ? 'verified' : 'awaiting_verification';
+    return { doc_type: r.doc_type, display_name: r.display_name, document_id: r.document_id, doc_code: r.document_id ? docCode(r.document_id) : null, has_expiry: r.has_expiry, expiry_date: r.expiry_date, state, version: d?.version ?? null, correction: state === 'returned' ? d?.verification_note ?? null : null };
+  });
+  const openDef = (db.prepare(`SELECT COUNT(*) c FROM deficiencies WHERE application_id=? AND status IN ('open','responded')`).get(a.id) as any).c;
+  const outstanding = (db.prepare(`SELECT COUNT(*) c FROM undertakings WHERE application_id=? AND status IN ('pending','returned')`).get(a.id) as any).c;
+  const blockers = docs.filter(d => d.state === 'missing' || d.state === 'returned');
+  const finished = ['approved', 'rejected', 'withdrawn'].includes(a.status);
+  const state = a.status === 'draft' ? (blockers.length ? 'not_ready' : 'ready_to_submit') : finished ? a.status : 'submitted';
+  const label = { not_ready: 'Not ready to submit', ready_to_submit: 'Ready to submit. Nothing has been sent yet.', submitted: 'Submitted and being processed', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn' }[state as string];
+  return { state, label, can_submit: state === 'ready_to_submit', items: docs, missing: docs.filter(d => d.state === 'missing').length, returned: docs.filter(d => d.state === 'returned').length, awaiting_verification: docs.filter(d => d.state === 'awaiting_verification').length, verified: docs.filter(d => d.state === 'verified').length,
+    open_deficiencies: openDef, outstanding_obligations: outstanding, note: state === 'ready_to_submit' ? 'Verification by an officer happens after you submit. Readiness does not mean the documents are accepted.' : null };
+}

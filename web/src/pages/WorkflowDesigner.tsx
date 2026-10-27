@@ -6,7 +6,7 @@ import { api, errMsg } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLookups } from '../lib/hooks';
 import { ROLE_LABEL } from '../lib/format';
-import { Badge, Button, Card, ErrorBox, Field, Input, PageHeader, Query, Select, useToast, cx } from '../components/ui';
+import { Badge, Button, Card, ErrorBox, Field, Input, Modal, PageHeader, Query, Select, useToast, cx } from '../components/ui';
 
 type Stage = any; type Trans = any;
 const stageNode = (s: Stage, i: number): Node => ({ id: s.key, type: 'stage', position: { x: s.pos_x ?? (i % 4) * 230, y: s.pos_y ?? Math.floor(i / 4) * 150 }, data: { ...s } });
@@ -39,6 +39,7 @@ export default function WorkflowDesigner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]); const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [sel, setSel] = useState<{ kind: 'node' | 'edge'; id: string } | null>(null);
   const [report, setReport] = useState<any>(null); const [sim, setSim] = useState<any>(null); const [err, setErr] = useState<unknown>(null);
+  const [pub, setPub] = useState<null | { diff: string[]; check: any }>(null);
   const [activate, setActivate] = useState(true); const [note, setNote] = useState(''); const [busy, setBusy] = useState('');
   const wf = wfs.data?.find(w => w.id === wfId);
   useEffect(() => { if (wfs.data?.length && wfId === null) { setWfId(wfs.data[0].id); } }, [wfs.data, wfId]);
@@ -72,6 +73,18 @@ export default function WorkflowDesigner() {
     const v = await api('/workflows/validate', { body: { definition: definition() } }); setReport(v);
     const path = v.paths?.[0]; if (!path) throw new Error('No complete route from the start stage to an outcome exists yet.');
     setSim(await api('/workflows/simulate', { body: { definition: definition(), steps: path.actions.map((a: string) => ({ action: a, after_days: 5 })) } }));
+  });
+  const openPublish = () => guard('pub', async () => {
+    const after = definition(), before = ver.data?.definition ?? { stages: [], transitions: [] }; const check = await api('/workflows/validate', { body: { definition: after } });
+    const bk = new Map<string, any>(before.stages.map((s: any) => [s.key, s])), ak = new Map<string, any>(after.stages.map((s: any) => [s.key, s]));
+    const diff: string[] = [];
+    for (const k of ak.keys()) if (!bk.has(k)) diff.push(`Stage added: ${ak.get(k).name}`);
+    for (const k of bk.keys()) if (!ak.has(k)) diff.push(`Stage removed: ${bk.get(k).name}`);
+    for (const [k, s] of ak) { const o = bk.get(k); if (!o) continue; if ((o.deadline_days ?? null) !== (s.deadline_days ?? null)) diff.push(`${s.name}: deadline ${o.deadline_days ?? 'none'} to ${s.deadline_days ?? 'none'} days`); if (o.responsible_role !== s.responsible_role) diff.push(`${s.name}: owner ${o.responsible_role} to ${s.responsible_role}`); if (o.name !== s.name) diff.push(`Stage renamed: ${o.name} to ${s.name}`); }
+    const tk = (t: any) => `${t.from_key}|${t.action}`; const bt = new Set(before.transitions.map(tk)), at = new Set(after.transitions.map(tk));
+    for (const t of at) if (!bt.has(t as string)) diff.push(`Transition added: ${(t as string).replace('|', ' → action ')}`);
+    for (const t of bt) if (!at.has(t as string)) diff.push(`Transition removed: ${(t as string).replace('|', ' → action ')}`);
+    setPub({ diff, check });
   });
   const save = () => guard('save', async () => {
     const r = await api<any>(`/workflows/${wfId}/versions`, { body: { definition: definition(), activate, note: note || undefined } });
@@ -139,10 +152,10 @@ export default function WorkflowDesigner() {
           <Card title="Check and save" actions={canEdit ? <Button size="sm" onClick={addStage}>Add stage</Button> : undefined}>
             <div className="flex flex-wrap items-end gap-3">
               <Button onClick={validate} busy={busy === 'v'}>Validate</Button>
-              <Button onClick={simulate} busy={busy === 's'}>Simulate a path</Button>
+              <Button onClick={simulate} busy={busy === 's'}>Preview a route</Button>
               {canEdit && <><div className="w-64"><Field label="Note for this version">{id => <Input id={id} value={note} onChange={e => setNote(e.target.value)} maxLength={300} />}</Field></div>
                 <label className="flex items-center gap-2 pb-2"><input type="checkbox" checked={activate} onChange={e => setActivate(e.target.checked)} />Activate for new applications</label>
-                <Button variant="primary" busy={busy === 'save'} onClick={save}>Save as new version</Button></>}
+                <Button variant="primary" busy={busy === 'pub'} onClick={openPublish}>Review and publish</Button></>}
             </div>
             {!!err && <div className="mt-3"><ErrorBox error={err} /></div>}
             {report && (
@@ -158,5 +171,14 @@ export default function WorkflowDesigner() {
           </Card>
         </div>)}</Query>
       <span className="hidden">{errMsg(null)}</span>
+      {pub && (
+        <Modal title="Publish a new workflow version" wide onClose={() => setPub(null)} footer={<><Button onClick={() => setPub(null)}>Go back</Button><Button variant="primary" busy={busy === 'save'} disabled={!pub.check.valid} onClick={async () => { await save(); setPub(null); }}>{activate ? 'Publish and activate' : 'Save without activating'}</Button></>}>
+          <p className="font-medium">{pub.diff.length === 0 ? 'No differences from the version you opened.' : `${pub.diff.length} change${pub.diff.length === 1 ? '' : 's'} from the version you opened`}</p>
+          {pub.diff.length > 0 && <ul className="list-disc pl-5 text-[14px]">{pub.diff.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+          <p className={pub.check.valid ? 'text-good' : 'text-bad'}>{pub.check.valid ? 'The workflow passes validation.' : 'The workflow has problems and cannot be published:'}</p>
+          {!pub.check.valid && <ul className="list-disc pl-5 text-bad">{pub.check.errors.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>}
+          <div className="rounded-md bg-brand-soft p-3 text-[14px]">{activate ? <p><b>New applications will use this version.</b> Applications already in progress stay on the version they started with. Use <i>Preview a route</i> first if you want to see how a case would move.</p> : <p>The version will be saved but not used until it is activated.</p>}</div>
+          {!!err && <ErrorBox error={err} />}
+        </Modal>)}
     </>);
 }

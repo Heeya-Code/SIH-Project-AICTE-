@@ -57,7 +57,7 @@ export default function Analytics() {
                   <tbody>{d.bottlenecks.rows.map((b: any) => (
                     <>
                       <tr key={b.key}><Td className="font-medium">{b.label}</Td><Td><Badge tone={LEVEL[b.level]}>{b.level} ({b.score})</Badge></Td>
-                        <Td><button className="text-brand hover:underline" onClick={() => drill(b.drill)}>{b.open}</button></Td><Td>{b.overdue} ({b.overdue_share}%)</Td><Td>{b.avg_open_age_days}</Td><Td>{b.median_completed_days ?? 'not enough history'}</Td>
+                        <Td><button className="-my-1 inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-brand underline-offset-2 hover:underline" aria-label={`${b.open} open applications, show them`} onClick={() => drill(b.drill)}>{b.open}</button></Td><Td>{b.overdue} ({b.overdue_share}%)</Td><Td>{b.avg_open_age_days}</Td><Td>{b.median_completed_days ?? 'not enough history'}</Td>
                         <Td><Button size="sm" variant="ghost" aria-expanded={open === b.key} onClick={() => setOpen(open === b.key ? null : b.key)}>{open === b.key ? 'Hide' : 'Why'}</Button></Td></tr>
                       {open === b.key && <tr key={`${b.key}w`}><Td colSpan={7} className="bg-paper"><ul className="list-disc pl-5 text-[13px]">{b.explanation.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul></Td></tr>}
                     </>))}</tbody></Table>)}

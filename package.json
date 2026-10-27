@@ -16,6 +16,7 @@
     "test": "npm --prefix server test && npm --prefix web test",
     "typecheck": "npm --prefix server run typecheck && npm --prefix web run typecheck",
     "docs": "npm --prefix server run docs",
-    "import": "npm --prefix server run import --"
+    "import": "npm --prefix server run import --",
+    "i18n:check": "npx --prefix server tsx scripts/i18n-check.ts"
   }
 }

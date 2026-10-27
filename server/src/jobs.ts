@@ -85,7 +85,6 @@ function documentExpiry(db: DB, today: string) {
     }
     const horizon = Math.max(...days, 0);
     const left = daysBetween(today, d.expiry_date);
-    console.log('DOC EXPIRY DEBUG:', { docId: d.id, docType: d.doc_type, today, expiry: d.expiry_date, left, horizon, days });
     const inst = { role: 'institution' as const, institutionId: d.institution_id };
     const vars = { doc_type: docName(d.doc_type), due: d.expiry_date, days: left < 0 ? -left : left };
     if (left < 0) {
@@ -95,10 +94,8 @@ function documentExpiry(db: DB, today: string) {
     } else if (left <= horizon) {
       if (d.renewal_status === 'not_due') db.prepare(`UPDATE documents SET renewal_status='due_for_renewal' WHERE id=?`).run(d.id);
       const bucket = reminderBucket(left, days);
-      console.log('BUCKET:', { left, days, bucket });
       if (bucket !== null) {
         const res = notifyRole(db, inst, { event: 'document.expiry_approaching', vars, link: '/documents', dedupeKey: `doc-rem:${d.id}:${bucket}`, entity: { type: 'document', id: d.id } });
-        console.log('NOTIFY ROLE RESULT:', res);
         reminders += res;
         if (req?.auto_renewal === 1) {
           const existingUnd = db.prepare(`SELECT 1 FROM undertakings WHERE institution_id=? AND document_id=? AND status NOT IN ('closed')`).get(d.institution_id, d.id);
@@ -107,7 +104,7 @@ function documentExpiry(db: DB, today: string) {
             const description = `Automatic renewal task created for ${docName(d.doc_type)} (Expiring on ${d.expiry_date}).`;
             const required_evidence = `Valid renewed ${docName(d.doc_type)}`;
             const undId = Number(db.prepare(`INSERT INTO undertakings (code,institution_id,region_id,application_id,document_id,condition_text,description,required_evidence,due_date,status,created_by,created_at)
-              VALUES (?,?,?,?,?,?,?,?, 'pending', NULL, ?)`).run(`TMP-${Math.random()}`, d.institution_id, d.region_id, d.application_id, d.id, condition_text, description, required_evidence, d.expiry_date, clock.iso()).lastInsertRowid);
+              VALUES (?,?,?,?,?,?,?,?,?, 'pending', NULL, ?)`).run(`TMP-${Math.random()}`, d.institution_id, d.region_id, d.application_id, d.id, condition_text, description, required_evidence, d.expiry_date, clock.iso()).lastInsertRowid);
             const code = (id: number) => `UT-${clock.today().slice(0, 4)}-${String(id).padStart(5, '0')}`;
             db.prepare('UPDATE undertakings SET code=?, synthetic=? WHERE id=?').run(code(undId), originFlag(), undId);
             audit(db, { actor: SYSTEM, type: 'undertaking.created', entity: 'undertaking', entityId: undId, next: { document_id: d.id, auto_renewal: true, due_date: d.expiry_date } });

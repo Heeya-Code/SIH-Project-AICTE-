@@ -21,7 +21,7 @@ describe('login form', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('Enter your email')).toBeInTheDocument();
     expect(screen.getByText('Enter your password')).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText('Email'), 'not-an-email');
+    await userEvent.type(screen.getByLabelText('Email address'), 'not-an-email');
     await userEvent.type(screen.getByLabelText('Password'), 'x');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('Enter a valid email address')).toBeInTheDocument();
@@ -30,15 +30,15 @@ describe('login form', () => {
   it('shows the server error for wrong credentials', async () => {
     mockApi({ '/api/auth/login': () => [401, { error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect' } }] });
     renderApp(<Login />);
-    await userEvent.type(screen.getByLabelText('Email'), 'ro.nr@demo.local');
+    await userEvent.type(screen.getByLabelText('Email address'), 'ro.nr@demo.local');
     await userEvent.type(screen.getByLabelText('Password'), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Email or password is incorrect');
   });
   it('fills the demo credentials from the quick-pick buttons', async () => {
     renderApp(<Login />);
-    await userEvent.click(screen.getByRole('button', { name: 'Bureau officer' }));
-    expect(screen.getByLabelText('Email')).toHaveValue('bureau@demo.local');
+    await userEvent.click(screen.getByRole('button', { name: /Bureau officer/ }));
+    expect(screen.getByLabelText('Email address')).toHaveValue('bureau@demo.local');
   });
 });
 
@@ -53,7 +53,7 @@ describe('dashboard', () => {
   it('renders values returned by the backend, and an empty state for empty lists', async () => {
     await renderDash();
     const card = await screen.findByText('Overdue cases', { selector: 'p' });
-    expect(within(card.closest('div')!).getByText('7')).toBeInTheDocument();
+    expect(within(card.closest('div')!.parentElement!).getByText('7')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('No overdue cases in your Region.')).toBeInTheDocument();
   });

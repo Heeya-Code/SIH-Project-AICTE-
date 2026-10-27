@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Download, Eye } from 'lucide-react';
+import { DocPreview } from '../components/DocPreview';
 import { api, download, qstr } from '../lib/api';
 import { useLookupMaps } from '../lib/hooks';
 import { fmtDate, pretty } from '../lib/format';
@@ -10,7 +11,7 @@ import { ReasonDialog } from '../components/ReasonDialog';
 
 export default function Verification() {
   const lk = useLookupMaps(); const qc = useQueryClient(); const toast = useToast();
-  const [f, setF] = useState<Record<string, string>>({}); const [page, setPage] = useState(1); const [ret, setRet] = useState<any>(null);
+  const [f, setF] = useState<Record<string, string>>({}); const [page, setPage] = useState(1); const [ret, setRet] = useState<any>(null); const [prev, setPrev] = useState<any>(null);
   const sum = useQuery({ queryKey: ['queue-summary'], queryFn: () => api<any>('/documents/queue-summary') });
   const q = useQuery({ queryKey: ['queue', f, page], queryFn: () => api<any>(`/documents${qstr({ ...f, queue: 1, page, pageSize: 12 })}`), placeholderData: p => p });
   const set = (k: string, v: string) => { setF(x => ({ ...x, [k]: v })); setPage(1); };
@@ -35,10 +36,11 @@ export default function Verification() {
                 <Td>{x.application_id ? <Link className="text-brand hover:underline" to={`/applications/${x.application_id}`}>{x.application_ref}</Link> : '–'}<p className="text-[13px] text-muted">{pretty(x.app_status)}</p></Td>
                 <Td><Badge tone={x.waiting_days > 7 ? 'warn' : 'neutral'}>{x.waiting_days} day{x.waiting_days === 1 ? '' : 's'}</Badge></Td>
                 <Td>{x.expiry_date ? <>{fmtDate(x.expiry_date)}<p><Badge tone={x.expiry_state === 'expired' ? 'bad' : x.expiry_state === 'expiring_soon' ? 'warn' : 'good'}>{x.expiry_state === 'expired' ? `Expired ${-x.days_to_expiry}d ago` : `${x.days_to_expiry}d left`}</Badge></p></> : <span className="text-muted">No expiry</span>}</Td>
-                <Td className="whitespace-nowrap"><Button size="sm" variant="ghost" aria-label={`Download ${x.file_name}`} onClick={() => download(`/documents/${x.id}/download`, x.file_name).catch(e => toast.err(e.message))}><Download className="h-4 w-4" /></Button>
+                <Td className="whitespace-nowrap"><Button size="sm" variant="ghost" aria-label={`Preview ${x.display_name}`} onClick={() => setPrev(x)}><Eye className="h-4 w-4" aria-hidden /></Button><Button size="sm" variant="ghost" aria-label={`Download ${x.display_name}`} onClick={() => download(`/documents/${x.id}/download`, x.file_name).catch(e => toast.err(e.message))}><Download className="h-4 w-4" /></Button>
                   <Button size="sm" variant="primary" onClick={() => decide(x, 'verified').catch(e => toast.err(e.message))}>Verify</Button> <Button size="sm" onClick={() => setRet(x)}>Return</Button></Td></tr>))}</tbody></Table>
             <Pager page={d.page} pages={d.pages} total={d.total} onPage={setPage} /></>)}</Query>
       </Card>
+      {prev && <DocPreview id={prev.id} name={prev.display_name} fileName={prev.file_name} onClose={() => setPrev(null)} />}
       {ret && <ReasonDialog title={`Return ${ret.display_name}`} required label="What needs to be corrected?" submitLabel="Return document" onSubmit={r => decide(ret, 'returned', r)} onClose={() => setRet(null)} />}
     </>);
 }

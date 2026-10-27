@@ -78,7 +78,10 @@ export function buildDashboard(db: DB, user: User) {
         { key: 'actions', title: 'Pending actions', columns: [{ key: 'title', label: 'Task' }, { key: 'due_date', label: 'Due' }, { key: 'days', label: 'Days left' }], rows: tasks.map(t => ({ title: t.title, due_date: t.due_date, days: t.due_date ? daysBetween(today, t.due_date) : '', link: `/applications/${t.application_id}` })), empty: 'Nothing is waiting for you right now.' },
         { key: 'deadlines', title: 'Upcoming deadlines', columns: [{ key: 'what', label: 'Item' }, { key: 'date', label: 'Date' }, { key: 'state', label: 'State' }],
           rows: [...unds.filter(u => ['pending', 'returned'].includes(u.status)).map(u => ({ what: `${u.code}: ${u.condition_text}`, date: u.due_date, state: effectiveStatus(db, u, today).replace(/_/g, ' '), link: '/compliance' })),
-            ...docs.filter(d => daysBetween(today, d.expiry_date) <= 90).map(d => ({ what: `${docName(d.doc_type)} expiry (${docCode(d.id)})`, date: d.expiry_date, state: daysBetween(today, d.expiry_date) < 0 ? 'expired' : 'expiring', link: '/documents' }))].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 20), empty: 'No upcoming deadlines.' },
+            ...docs.filter(d => daysBetween(today, d.expiry_date) <= 90).map(d => ({ what: `${docName(d.doc_type)} expiry (${docCode(d.id)})`, date: d.expiry_date, state: daysBetween(today, d.expiry_date) < 0 ? 'expired' : 'expiring', link: '/documents' }))].map(r => ({ ...r, role: 'Your institution', action: /expir/.test(r.what) ? 'Renew and upload the new version' : 'Submit evidence' }))
+            .concat(tasks.filter((t: any) => t.due_date).map((t: any) => ({ what: `Response to the request on ${t.ref}`, date: t.due_date, state: 'awaiting you', role: 'Your institution', action: 'Respond and resubmit', link: `/applications/${t.application_id}` })))
+            .map(r => { const left = daysBetween(today, r.date); return { ...r, group: left < 0 ? 'overdue' : left <= 7 ? 'due_soon' : 'later', days: left, urgency: left < 0 ? `${-left} day(s) overdue` : left === 0 ? 'due today' : `${left} day(s) left` }; })
+            .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30), grouped: true, empty: 'No upcoming deadlines.' },
         { key: 'subs', title: 'Submission history', columns: [{ key: 'ref', label: 'Application' }, { key: 'kind', label: 'Type' }, { key: 'docs', label: 'Documents' }, { key: 'at', label: 'Submitted' }],
           rows: (db.prepare(`SELECT a.ref, a.title, s.kind, s.version, s.snapshot, substr(s.submitted_at,1,10) AS at, a.id AS app FROM application_submissions s JOIN applications a ON a.id=s.application_id WHERE ${A.sql} ORDER BY s.id DESC LIMIT 20`).all(...A.params) as any[])
             .map(({ snapshot, ...r }) => ({ ...r, kind: r.kind === 'initial' ? 'Initial submission' : `Resubmission (version ${r.version})`, docs: submissionDocs(snapshot).map(x => x.display_name).join(', ') || 'No documents recorded', link: `/applications/${r.app}` })), empty: 'No submissions yet.' });
@@ -250,6 +253,58 @@ export function askAssistant(db: DB, user: User, question: string) {
     const stage = a.workflow_version_id ? (db.prepare('SELECT * FROM workflow_stages WHERE version_id=? AND key=?').get(a.workflow_version_id, a.current_stage) as any) : null;
     const tasks = db.prepare(`SELECT t.*, u.name AS who FROM tasks t LEFT JOIN users u ON u.id=t.assigned_user_id WHERE t.application_id=? AND t.status='open'`).all(a.id) as any[];
     const actions = availableActions(db, user, a);
+    if (/document|lease|expiry|expire|validity/.test(q)) {
+      const docs = db.prepare(`SELECT id, doc_type, verification_status, expiry_date, file_name FROM documents WHERE application_id=? AND is_current=1 ORDER BY doc_type`).all(a.id) as any[];
+      const required = db.prepare(`SELECT doc_type FROM document_requirements WHERE category_code=? AND required=1 ORDER BY doc_type`).all(a.category_code) as any[];
+      const present = new Set(docs.map(d => d.doc_type));
+      facts.push(`${name} has ${docs.length} current document record(s).`);
+      facts.push(`The configured ${a.category_code} checklist has ${required.length} required type(s); it is demonstration configuration, not a confirmed official requirement.`);
+      const missing = required.filter(r => !present.has(r.doc_type));
+      missing.forEach(r => facts.push(`No current upload is recorded for configured checklist item: ${docName(r.doc_type)}.`));
+      for (const d of docs) {
+        refs.push({ type: 'document', id: d.id, label: `${docName(d.doc_type)} (${docCode(d.id)})`, link: `/applications/${a.id}` });
+        facts.push(`${docName(d.doc_type)} (${docCode(d.id)}): system verification status ${d.verification_status}${d.expiry_date ? `; expiry recorded as ${d.expiry_date}` : '; no expiry date recorded'}.`);
+      }
+      return done(`Documents for ${name}`);
+    }
+    if (/deficien|clarification|resubmi|returned/.test(q)) {
+      const rows = db.prepare(`SELECT id, category, description, status, due_date, corrective_action FROM deficiencies WHERE application_id=? ORDER BY id DESC LIMIT 20`).all(a.id) as any[];
+      facts.push(`${name} has ${rows.length} recorded deficiency item(s).`);
+      rows.forEach(d => {
+        refs.push({ type: 'deficiency', id: d.id, label: `Deficiency ${d.id}`, link: `/applications/${a.id}` });
+        facts.push(`${d.category}: ${d.description} (status: ${d.status}${d.due_date ? `, response due ${d.due_date}` : ''}${d.corrective_action ? `; recorded response: ${d.corrective_action}` : ''}).`);
+      });
+      if (!rows.length) facts.push('No deficiency is recorded for this application in the available case data.');
+      return done(`Deficiencies for ${name}`);
+    }
+    if (/inspection|evc|visit|schedule/.test(q)) {
+      const visits = db.prepare(`SELECT e.*, r.submitted_at AS report_submitted_at, r.outcome AS report_outcome FROM evc_schedules e
+        LEFT JOIN evc_reports r ON r.evc_id=e.id WHERE e.application_id=? ORDER BY e.id DESC LIMIT 5`).all(a.id) as any[];
+      if (!visits.length) facts.push(`${name} has no EVC / visit schedule recorded.`);
+      visits.forEach(e => {
+        const state = evcState(e, today);
+        refs.push({ type: 'evc', id: e.id, label: `${name} visit`, link: '/evc' });
+        facts.push(`Visit state: ${state.state}; schedule deadline ${e.schedule_deadline ?? 'not recorded'}${e.confirmed_date ? `; confirmed date ${e.confirmed_date}` : '; no confirmed date'}${e.report_submitted_at ? `; report submitted ${e.report_submitted_at}` : '; report not recorded as submitted'}.`);
+      });
+      return done(`Visit information for ${name}`);
+    }
+    if (/decision|approval|approved|rejected|outcome/.test(q)) {
+      facts.push(a.status === 'approved' || a.status === 'rejected'
+        ? `Recorded case outcome: ${a.status}${a.completed_at ? ` on ${a.completed_at.slice(0, 10)}` : ''}. This reflects the current case record, not an independent legal determination.`
+        : `No final approval or rejection is recorded. Current workflow status: ${a.status.replace('_', ' ')}${stage ? ` at "${stage.name}"` : ''}.`);
+      return done(`Recorded outcome for ${name}`);
+    }
+    if (/audit|history|who did|action record/.test(q)) {
+      if (user.role === 'institution') {
+        facts.push('Audit history is restricted to authorised officer roles. This assistant cannot show it for an institution account.');
+      } else {
+        const rows = db.prepare(`SELECT at, actor_label, event_type FROM audit_log WHERE entity_type='application' AND entity_id=? ORDER BY id DESC LIMIT 8`).all(String(a.id)) as any[];
+        facts.push(`${rows.length} recent application-level audit event(s) are available.`);
+        rows.forEach(x => facts.push(`${x.at}: ${x.event_type} by ${x.actor_label}.`));
+        refs.push({ type: 'audit', id: a.id, label: `${name} audit history`, link: `/applications/${a.id}` });
+      }
+      return done(`History for ${name}`);
+    }
     if (/next action|what should|what action|what can i/.test(q)) {
       facts.push(`${name} is at "${stage?.name ?? a.status}".`);
       if (!actions.length) facts.push('You have no workflow action available for this application at this stage.');
@@ -291,12 +346,30 @@ export function askAssistant(db: DB, user: User, question: string) {
     rows.slice(0, 8).forEach(a => facts.push(`${appRef(a)} (${a.institution_name}): ${a.days_in_stage} day(s) in scrutiny.`));
     return done('Longest in scrutiny');
   }
-  if (/evc|visit/.test(q)) {
+  if (/evc|visit|inspection|committee/.test(q)) {
     const E = scope(user, 'e');
-    const rows = (db.prepare(`SELECT e.*, a.ref FROM evc_schedules e JOIN applications a ON a.id=e.application_id WHERE ${E.sql} AND e.status='queued' ORDER BY e.schedule_deadline LIMIT 10`).all(...E.params) as any[]);
-    facts.push(`${rows.length} EVC visit(s) are waiting to be scheduled.`);
-    rows.forEach(e => { refs.push({ type: 'evc', id: e.id, label: e.ref, link: '/evc' }); facts.push(`${e.ref}: schedule by ${e.schedule_deadline} (${daysBetween(today, e.schedule_deadline) < 0 ? `${-daysBetween(today, e.schedule_deadline)} day(s) late` : `${daysBetween(today, e.schedule_deadline)} day(s) left`}).`); });
-    if (rows.length) suggestions.push('Open EVC Scheduling and use "Suggest slots" for the earliest free committee dates.');
+    const rows = db.prepare(`SELECT e.*, a.ref, c.name AS committee_name, r.submitted_at AS report_submitted_at FROM evc_schedules e
+      JOIN applications a ON a.id=e.application_id LEFT JOIN evc_committees c ON c.id=e.committee_id
+      LEFT JOIN evc_reports r ON r.evc_id=e.id WHERE ${E.sql} AND e.status IN ('queued','scheduled','rescheduled')
+      ORDER BY CASE WHEN e.confirmed_date IS NULL THEN 1 ELSE 0 END, e.confirmed_date, e.schedule_deadline LIMIT 20`).all(...E.params) as any[];
+    const queued = rows.filter(e => e.status === 'queued');
+    facts.push(`${queued.length} EVC visit(s) are waiting to be scheduled; ${rows.length - queued.length} active visit(s) have a schedule.`);
+    rows.forEach(e => {
+      refs.push({ type: 'evc', id: e.id, label: e.ref, link: '/evc' });
+      facts.push(e.status === 'queued'
+        ? `${e.ref}: schedule by ${e.schedule_deadline} (${daysBetween(today, e.schedule_deadline) < 0 ? `${-daysBetween(today, e.schedule_deadline)} day(s) late` : `${daysBetween(today, e.schedule_deadline)} day(s) left`}).`
+        : `${e.ref}: ${e.status}; ${e.confirmed_date ? `scheduled ${e.confirmed_date}` : 'no confirmed date'}${e.committee_name ? ` with ${e.committee_name}` : ''}${e.completion_deadline ? `; report deadline ${e.completion_deadline}` : ''}${e.report_submitted_at ? `; report submitted ${e.report_submitted_at.slice(0, 10)}` : ''}.`);
+    });
+    if (/conflict|double.book|clash/.test(q)) {
+      const conflicts = new Map<string, number>();
+      rows.filter(e => e.confirmed_date && e.committee_id).forEach(e => {
+        const key = `${e.committee_id}:${e.confirmed_date}`;
+        conflicts.set(key, (conflicts.get(key) ?? 0) + 1);
+      });
+      const clashes = [...conflicts].filter(([, count]) => count > 1);
+      facts.push(clashes.length ? `${clashes.length} committee/date collision(s) appear in the visible schedule records; an authorised coordinator should review them.` : 'No committee/date collisions are recorded in the visible schedule records. This reflects stored data only.');
+    }
+    if (queued.length) suggestions.push('Open EVC Scheduling and use "Suggest slots" for the earliest free committee dates.');
     return done('EVC visits to schedule');
   }
   if (/lease|document|expir/.test(q)) {

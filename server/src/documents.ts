@@ -5,7 +5,7 @@ import { notifyRole, notify } from './notify';
 import { canSee, type User } from './auth';
 import { badRequest, conflict, forbidden, isDate, notFound, unprocessable } from './util';
 import { sweepEscalations } from './escalation';
-import { docName } from './docnames';
+import { docName, docCode } from './docnames';
 import { originFlag } from './origin';
 import type { StoredFile } from './files';
 
@@ -48,7 +48,16 @@ export function addDocument(db: DB, user: User, input: UploadInput, file: Stored
     db.prepare('UPDATE documents SET lineage_id=COALESCE(lineage_id,?), synthetic=? WHERE id=?').run(prev?.lineage_id ?? id, originFlag(), id);
     if (prev) {
       db.prepare(`UPDATE documents SET is_current=0, renewal_status='renewed' WHERE id=?`).run(prev.id);
-      db.prepare(`UPDATE undertakings SET status='closed' WHERE document_id=? AND status NOT IN ('closed')`).run(prev.id);
+      // An obligation created automatically for this document: the renewed upload becomes its evidence submission and waits for an officer.
+      // It is never closed or verified here (an upload alone is not verification).
+      for (const u of db.prepare(`SELECT * FROM undertakings WHERE document_id=? AND status IN ('pending','returned')`).all(prev.id) as any[]) {
+        const v = ((db.prepare('SELECT MAX(version) m FROM compliance_submissions WHERE undertaking_id=?').get(u.id) as any).m ?? 0) + 1;
+        db.prepare(`INSERT INTO compliance_submissions (undertaking_id,version,note,file_name,storage_ref,mime,size,submitted_by,submitted_at) VALUES (?,?,?,?,?,?,?,?,?)`)
+          .run(u.id, v, `Renewed ${docName(input.doc_type)} uploaded (${docCode(id)}, version ${version})${input.expiry_date ? `, valid until ${input.expiry_date}` : ''}.`, file.file_name, file.storage_ref, file.mime, file.size, user.id, now);
+        db.prepare(`UPDATE undertakings SET status='submitted' WHERE id=?`).run(u.id);
+        audit(db, { actor: actorOf(user), type: 'compliance.evidence_submitted', entity: 'undertaking', entityId: u.id, prev: { status: u.status }, next: { status: 'submitted', submission_version: v, via: 'document_renewal', document_id: id } });
+        notifyRole(db, { role: u.verifier_role, regionId: u.region_id }, { event: 'compliance.submitted', vars: { code: u.code }, link: '/compliance', dedupeKey: `und-sub:${u.id}:${v}`, entity: { type: 'undertaking', id: u.id } });
+      }
     }
     audit(db, { actor: actorOf(user), type: prev ? 'document.renewed' : 'document.uploaded', entity: 'document', entityId: id, prev: prev ? { id: prev.id, version: prev.version, expiry_date: prev.expiry_date } : null,
       next: { doc_type: input.doc_type, version, expiry_date: input.expiry_date ?? null, application_id: input.application_id ?? null } });

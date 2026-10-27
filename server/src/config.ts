@@ -18,6 +18,11 @@ export const config = {
   seed: Number(env.SEED ?? 2026),
   seedApplications: Number(env.SEED_APPLICATIONS ?? 500),
   loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 20),
+  // Optional OpenAI-compatible chat-completions provider. No request is made unless a key is configured.
+  aiApiKey: env.AI_API_KEY ?? env.OPENAI_API_KEY ?? '',
+  aiBaseUrl: env.AI_BASE_URL ?? 'https://api.openai.com/v1',
+  aiModel: env.AI_MODEL ?? 'gpt-4o-mini',
+  aiTimeoutMs: Number(env.AI_TIMEOUT_MS ?? 20_000),
 };
 
 export function assertSafeConfig() {

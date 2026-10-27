@@ -48,7 +48,7 @@ describe('descriptive document names', () => {
     expect(n.title).toContain('Lease Agreement'); expect(n.title).not.toContain('Lease Deed');
     const tl = JSON.stringify((await u.get(`/api/applications/${id}/timeline`)).body); expect(tl).toContain(`Lease Agreement (${docCode(docId)})`);
     const dash = (await u.get('/api/dashboard')).body;
-    const dl = dash.lists.find((l: any) => l.key === 'deadlines').rows.find((r: any) => /Lease Agreement/.test(r.what)); expect(dl.what).toContain(docCode(docId));
+    const dl = dash.lists.find((l: any) => l.key === 'deadlines').rows.find((r: any) => /Lease Agreement expiry \(DOC-\d{4}\)/.test(r.what)); expect(dl.what).toContain(docCode(docId));
     const subs = dash.lists.find((l: any) => l.key === 'subs').rows[0]; expect(subs.docs).toContain('Lease Agreement'); expect(subs.kind).toBe('Initial submission');
     const admin = await ctx.as('admin@demo.local');
     const aud = (await admin.get('/api/audit?entity_type=document')).body.rows[0]; expect(aud.entity_label).toContain('(DOC-');

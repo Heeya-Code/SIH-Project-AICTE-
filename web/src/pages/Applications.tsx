@@ -10,6 +10,8 @@ import { api, download, qstr } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLookupMaps } from '../lib/hooks';
 import { APP_STATUS, fmtDate } from '../lib/format';
+import { useStoredList } from '../lib/hooks';
+import { getRecent } from '../lib/recent';
 import { Badge, Button, Card, DeadlineMeter, Empty, ErrorBox, Field, Input, PageHeader, Pager, Query, Select, Table, Td, Textarea, Th, useToast } from '../components/ui';
 
 export function ApplicationList() {
@@ -18,6 +20,8 @@ export function ApplicationList() {
   const page = Number(f.page ?? 1), sort = f.sort ?? 'updated', order = f.order ?? 'desc';
   const set = (patch: Record<string, string>) => { const n = new URLSearchParams(sp); for (const [k, v] of Object.entries(patch)) v ? n.set(k, v) : n.delete(k); if (!('page' in patch)) n.delete('page'); setSp(n); };
   const q = useQuery({ queryKey: ['applications', f], queryFn: () => api<any>(`/applications${qstr({ ...f, page, pageSize: 15, sort, order })}`), placeholderData: p => p });
+  const [presets, savePresets] = useStoredList<{ name: string; query: string }>(`af_presets_${user!.id}`, 8); const [naming, setNaming] = useState(false); const [pname, setPname] = useState('');
+  const recent = getRecent(user!.id); const filterCount = Object.keys(f).filter(k => !['page', 'sort', 'order'].includes(k)).length;
   const toggle = (k: string) => set({ sort: k, order: sort === k && order === 'asc' ? 'desc' : 'asc' });
   const th = (label: string, key?: string) => <Th sort={key} active={sort === key} dir={order} onSort={toggle}>{label}</Th>;
   return (
@@ -26,6 +30,11 @@ export function ApplicationList() {
         actions={<>
           <Button onClick={() => download(`/reports/applications_register${qstr({ ...f, format: 'csv' })}`, 'applications.csv').catch(e => toast.err(e.message))}><Download className="h-4 w-4" aria-hidden />Export CSV</Button>
           {user!.role === 'institution' && <Link to="/applications/new"><Button variant="primary">New application</Button></Link>}</>} />
+      {(presets.length > 0 || recent.length > 0) && (
+        <div className="mb-3 space-y-2">
+          {presets.length > 0 && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Saved filters"><span className="text-[13px] text-muted">Saved filters</span>{presets.map(p => <span key={p.name} className="inline-flex items-center rounded-full border border-line bg-white"><button className="rounded-l-full px-3 py-1 hover:bg-paper" onClick={() => setSp(new URLSearchParams(p.query))}>{p.name}</button><button aria-label={`Delete saved filter ${p.name}`} className="rounded-r-full px-2 py-1 text-muted hover:bg-paper" onClick={() => savePresets(presets.filter(x => x.name !== p.name))}>×</button></span>)}</div>}
+          {recent.length > 0 && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Recently viewed"><span className="text-[13px] text-muted">Recently viewed</span>{recent.map(r => <Link key={r.id} to={`/applications/${r.id}`} title={r.title} className="rounded-full border border-line bg-white px-3 py-1 text-brand hover:bg-paper">{r.ref}</Link>)}</div>}
+        </div>)}
       <Card pad={false}>
         <form className="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-6" onSubmit={e => e.preventDefault()} role="search" aria-label="Filter applications">
           <div className="lg:col-span-2"><Field label="Search">{(id) => <Input id={id} placeholder="Reference, title or institution" defaultValue={f.q ?? ''} onKeyDown={e => { if (e.key === 'Enter') set({ q: (e.target as HTMLInputElement).value }); }} onBlur={e => e.target.value !== (f.q ?? '') && set({ q: e.target.value })} />}</Field></div>
@@ -37,6 +46,7 @@ export function ApplicationList() {
           <Field label="Deadline">{id => <Select id={id} value={f.deadline ?? ''} onChange={e => set({ deadline: e.target.value })}><option value="">Any</option><option value="overdue">Overdue</option><option value="due_soon">Due within 3 days</option></Select>}</Field>
           {user!.role !== 'institution' && <Field label="Assigned to">{id => <Select id={id} value={f.assigned_user_id ?? ''} onChange={e => set({ assigned_user_id: e.target.value })}><option value="">Anyone</option><option value="me">Me</option>{lk.officers.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>}</Field>}
         </form>
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">{naming ? (<form className="flex items-center gap-2" onSubmit={e => { e.preventDefault(); if (!pname.trim()) return; savePresets([{ name: pname.trim(), query: sp.toString() }, ...presets.filter(p => p.name !== pname.trim())]); setPname(''); setNaming(false); toast.ok('Filter saved on this device'); }}><Input aria-label="Name for this filter" value={pname} onChange={e => setPname(e.target.value)} maxLength={30} placeholder="Name, e.g. Overdue in my Region" /><Button type="submit" size="sm" variant="primary">Save</Button><Button size="sm" onClick={() => setNaming(false)}>Cancel</Button></form>) : (<Button size="sm" variant="ghost" disabled={filterCount === 0} title={filterCount === 0 ? 'Choose some filters first' : undefined} onClick={() => setNaming(true)}>Save these filters</Button>)}{filterCount > 0 && <Button size="sm" variant="ghost" onClick={() => setSp({})}>Clear all</Button>}</div>
         <Query q={q}>{(d: any) => d.rows.length === 0 ? (
           <Empty title="No applications match" hint={Object.keys(f).length ? 'Clear a filter to see more.' : user!.role === 'institution' ? 'Create your first application to begin.' : 'Applications appear here once an institution submits them.'}
             action={Object.keys(f).length ? <Button onClick={() => setSp({})}>Clear filters</Button> : user!.role === 'institution' ? <Link to="/applications/new"><Button variant="primary">New application</Button></Link> : undefined} />

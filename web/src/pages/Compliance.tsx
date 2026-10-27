@@ -107,7 +107,7 @@ export default function Compliance() {
         <Query q={q}>{(d: any) => d.rows.length === 0 ? <Empty title="No obligations found" hint={status || qtext ? 'Try clearing the filters.' : user!.role === 'institution' ? 'Obligations appear here when an approval carries conditions.' : 'Obligations are created from approval conditions, or recorded manually.'} /> : (
           <><Table><thead><tr><Th>Obligation</Th><Th>Institution</Th><Th>Due</Th><Th>Status</Th><Th><span className="sr-only">Open</span></Th></tr></thead>
             <tbody>{d.rows.map((u: any) => (
-              <tr key={u.id} className="hover:bg-paper"><Td><button className="text-left font-medium text-brand hover:underline" onClick={() => setOpen(u.id)}>{u.code}</button><p className="max-w-[300px] text-[13px]">{u.condition_text}</p></Td>
+              <tr key={u.id} className="hover:bg-paper"><Td><button className="-my-1 min-h-[28px] text-left font-medium text-brand hover:underline" onClick={() => setOpen(u.id)}>{u.code}</button><p className="max-w-[300px] text-[13px]">{u.condition_text}</p></Td>
                 <Td>{u.institution_name}<p className="text-[13px] text-muted">{u.region_name}</p></Td>
                 <Td>{fmtDate(u.due_date)}<p className={`text-[13px] ${u.days_to_due < 0 && ['pending', 'returned'].includes(u.status) ? 'text-bad' : 'text-muted'}`}>{['pending', 'returned'].includes(u.status) ? daysLabel(u.days_to_due) : ''}</p></Td>
                 <Td><Badge tone={toneFor(u.effective_status)}>{pretty(u.effective_status)}</Badge></Td>

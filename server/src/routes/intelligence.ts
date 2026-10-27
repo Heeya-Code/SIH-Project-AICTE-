@@ -10,6 +10,9 @@ import { buildAnalytics, computeAlerts, ALERT_RULES } from '../analytics';
 import { askReference } from '../reference';
 import { regulatorySummary } from '../regulatory';
 import { validateIntegrity } from '../integrity';
+import { assistantModelStatus, assistantRateLimit, generateAssistantAnswer } from '../assistant-model';
+import { matchingSampleDocuments, sampleKnowledge } from '../sample-documents';
+import { websiteKnowledge } from '../assistant-context';
 
 const STAFF = ['regional_officer', 'bureau_officer', 'evc_coordinator', 'competent_authority', 'admin'] as const;
 
@@ -69,10 +72,27 @@ export function regulatoryRouter(db: DB) {
 
 export function referenceRouter(db: DB) {
   const r = Router();
-  r.post('/ask', h((req, res) => {
-    const q = parse(z.object({ question: z.string().trim().min(3).max(300) }), req.body).question;
+  r.post('/ask', assistantRateLimit, h(async (req, res) => {
+    const body = parse(z.object({
+      question: z.string().trim().min(3).max(300),
+      history: z.array(z.object({ question: z.string().max(300), answer: z.string().max(1200) })).max(6).optional(),
+    }), req.body);
+    const q = body.question;
     audit(db, { actor: actorOf(req.user!), type: 'reference.query', entity: 'reference', entityId: null, reason: q.slice(0, 200) });
-    res.json(askReference(db, q));
+    const result = askReference(db, q);
+    const evidence = result.evidence.map(e => ({
+      title: e.title,
+      statement: e.statement,
+      status: e.verification_status,
+      source: e.source?.title,
+      section: e.section_ref,
+      page: e.page_ref,
+    }));
+    const sample_documents = matchingSampleDocuments(db, q);
+    const sampleEvidence = sampleKnowledge(sample_documents);
+    const model = assistantModelStatus();
+    const answer = result.reason === 'decision_request' ? null : await generateAssistantAnswer(q, { siteContext: websiteKnowledge(db, req.user!), retrievedEvidence: [...evidence, ...sampleEvidence] }, body.history);
+    res.json({ ...result, answer, model, sample_documents });
   }));
   return r;
 }

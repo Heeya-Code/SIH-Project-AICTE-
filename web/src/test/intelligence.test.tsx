@@ -55,7 +55,7 @@ describe('regulatory rules page', () => {
 
 describe('handbook assistant', () => {
   const setup = (answer: any) => { mockApi({ '/api/auth/me': () => [200, { user: me }], '/api/lookups': () => [200, lookups], '/api/reference/ask': () => [200, answer] }); renderAuthed(<Assistant />); };
-  const ask = async (text: string) => { await userEvent.click(await screen.findByRole('button', { name: 'Open the assistant' })); await userEvent.click(screen.getByRole('tab', { name: 'AICTE handbook' })); await userEvent.type(screen.getByLabelText('Your question'), text); await userEvent.click(screen.getByRole('button', { name: 'Send question' })); };
+  const ask = async (text: string) => { await userEvent.click(await screen.findByRole('button', { name: 'Ask the assistant' })); await userEvent.click(screen.getByRole('tab', { name: 'AICTE handbook' })); await userEvent.type(screen.getByLabelText('Your question'), text); await userEvent.click(screen.getByRole('button', { name: 'Send question' })); };
   it('shows evidence with source, section, page note and verification status, and caveats unverified material', async () => {
     setup({ answered: true, message: 'Found 1 relevant excerpt(s) in the indexed sources.', evidence: [{ rule_code: 'R-EVC-01', title: 'Scrutiny and EVC', statement: 'A scrutiny and an EVC are carried out for any increase in intake.', verification_status: 'verified_excerpt', section_ref: '2.6', page_ref: null, page_note: 'Printed page not confirmed.', source: { title: 'APH copy', trust: 'secondary', url: 'https://example.org' } }], caveats: ['None of these has been checked against the official handbook by an administrator yet.'], disclaimer: 'Paraphrased from excerpts. This tool cannot decide an approval.' });
     await ask('EVC for increase in intake?');
@@ -67,5 +67,57 @@ describe('handbook assistant', () => {
     await ask('pharmacy faculty ratio');
     expect(await screen.findByText('No answer from the indexed sources')).toBeInTheDocument(); expect(screen.getByText(/Nothing has been guessed/)).toBeInTheDocument();
     expect(within(screen.getByRole('dialog')).queryByText(/Section:/)).not.toBeInTheDocument();
+  });
+  it('offers an actual sample preview and sends recent turns for a follow-up', async () => {
+    let received: any;
+    let call = 0;
+    const calls = mockApi({
+      '/api/auth/me': () => [200, { user: me }],
+      '/api/lookups': () => [200, lookups],
+      '/api/reference/ask': (_url, init) => {
+        received = JSON.parse(String(init?.body));
+        call++;
+        return [200, {
+          answered: true,
+          message: 'Found a relevant example.',
+          answer: call === 1 ? 'This sample lease is fictional.' : 'The sample must not be used as evidence.',
+          evidence: [],
+          sample_documents: [{ doc_type: 'Lease Deed', display_name: 'Lease Agreement', link: '/documents?sample=Lease%20Deed' }],
+          model: { configured: true, model: 'test-model' },
+          disclaimer: 'Illustrative only.',
+        }];
+      },
+    });
+    renderAuthed(<Assistant />, '/documents');
+    await ask('Show me a sample lease deed');
+    expect(await screen.findByText('This sample lease is fictional.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Preview Lease Agreement/ })).toHaveAttribute('href', '/documents?sample=Lease%20Deed');
+
+    const input = screen.getByLabelText('Your question');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Is that official?');
+    await userEvent.click(screen.getByRole('button', { name: 'Send question' }));
+    await screen.findByText('The sample must not be used as evidence.');
+    await waitFor(() => expect(calls.filter(x => x.startsWith('POST /api/reference/ask'))).toHaveLength(2));
+    expect(received.history).toEqual([{ question: 'Show me a sample lease deed', answer: 'This sample lease is fictional.' }]);
+  });
+  it('shows a retry action after an assistant API failure', async () => {
+    let attempts = 0;
+    mockApi({
+      '/api/auth/me': () => [200, { user: me }],
+      '/api/lookups': () => [200, lookups],
+      '/api/reference/ask': () => {
+        attempts++;
+        return attempts === 1
+          ? [502, { error: { code: 'AI_PROVIDER_ERROR', message: 'The configured AI service returned an error. Please retry.' } }]
+          : [200, { answered: false, message: 'No source answer available.', evidence: [], disclaimer: 'Illustrative only.', model: { configured: false } }];
+      },
+    });
+    renderAuthed(<Assistant />);
+    await ask('Explain the current rules');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please retry');
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('No answer from the indexed sources')).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 });

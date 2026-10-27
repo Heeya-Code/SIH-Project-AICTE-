@@ -13,7 +13,12 @@ import { clock } from '../clock';
 import { REPORTS, reportsFor } from '../reports';
 import { askAssistant, buildDashboard, calendarEvents, pendencyForecast } from '../insights';
 import { PREREQUISITES, WORKFLOW_ROLES } from '../workflow';
+import { buildAttention } from '../attention';
 import { DOC_NAMES, docName } from '../docnames';
+import { askReference } from '../reference';
+import { assistantModelStatus, assistantRateLimit, generateAssistantAnswer } from '../assistant-model';
+import { matchingSampleDocuments, sampleKnowledge } from '../sample-documents';
+import { websiteKnowledge } from '../assistant-context';
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
@@ -65,17 +70,36 @@ export function lookupsRouter(db: DB) {
 
 export function insightsRouter(db: DB) {
   const r = Router();
-  r.get('/dashboard', h((req, res) => res.json(buildDashboard(db, req.user!))));
+  r.get('/assistant/status', h((_req, res) => res.json({ model: assistantModelStatus() })));
+  r.get('/dashboard', h((req, res) => res.json({ ...buildDashboard(db, req.user!), attention: buildAttention(db, req.user!) })));
   r.get('/calendar', h((req, res) => {
     const from = String(req.query.from ?? ''), to = String(req.query.to ?? '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new ApiError(400, 'BAD_REQUEST', 'from and to must be YYYY-MM-DD dates');
     res.json(calendarEvents(db, req.user!, from, to, typeof req.query.types === 'string' && req.query.types ? req.query.types.split(',') : undefined));
   }));
   r.get('/forecast', requireRole('regional_officer', 'bureau_officer', 'competent_authority', 'admin'), h((req, res) => res.json(pendencyForecast(db, req.user!))));
-  r.post('/assistant/ask', h((req, res) => {
-    const q = parse(z.object({ question: z.string().trim().min(2).max(300) }), req.body).question;
+  r.post('/assistant/ask', assistantRateLimit, h(async (req, res) => {
+    const body = parse(z.object({
+      question: z.string().trim().min(2).max(300),
+      history: z.array(z.object({ question: z.string().max(300), answer: z.string().max(1200) })).max(6).optional(),
+    }), req.body);
+    const q = body.question;
     audit(db, { actor: actorOf(req.user!), type: 'assistant.query', entity: 'assistant', entityId: null, reason: q.slice(0, 200) });
-    res.json(askAssistant(db, req.user!, q));
+    const result = askAssistant(db, req.user!, q);
+    const reference = askReference(db, q);
+    const evidence = reference.evidence.map(e => ({
+      title: e.title,
+      statement: e.statement,
+      status: e.verification_status,
+      source: e.source?.title,
+      section: e.section_ref,
+      page: e.page_ref,
+    }));
+    const sample_documents = matchingSampleDocuments(db, q);
+    const sampleEvidence = sampleKnowledge(sample_documents);
+    const model = assistantModelStatus();
+    const answer = await generateAssistantAnswer(q, { liveFacts: result.facts, siteContext: websiteKnowledge(db, req.user!), retrievedEvidence: [...evidence, ...sampleEvidence] }, body.history);
+    res.json({ ...result, answer, model, evidence, sample_documents, reference_notice: reference.disclaimer });
   }));
   return r;
 }

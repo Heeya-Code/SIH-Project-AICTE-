@@ -55,3 +55,21 @@ export const errDetails = (e: unknown): string[] => {
   if (d.unmet) return d.unmet; if (d.missing_documents) return d.missing_documents.map((m: string) => `Missing: ${m}`);
   return [];
 };
+
+export async function fetchBlob(path: string): Promise<{ blob: Blob; type: string }> { const res = await raw(path); const blob = await res.blob(); return { blob, type: res.headers.get('Content-Type') ?? blob.type }; }
+
+// fetch() cannot report upload progress, so file uploads use XMLHttpRequest.
+export function uploadWithProgress<T = any>(path: string, form: FormData, onProgress: (pct: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest(); x.open('POST', `/api${path}`); const t = tokenStore.get(); if (t) x.setRequestHeader('Authorization', `Bearer ${t}`);
+    x.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    x.onerror = () => reject(new ApiError(0, 'NETWORK', 'The upload was interrupted. Check your connection and try again.'));
+    x.onload = () => {
+      let body: any = null; try { body = JSON.parse(x.responseText); } catch { /* not JSON */ }
+      if (x.status >= 200 && x.status < 300) return resolve(body as T);
+      if (x.status === 401) onUnauthorized();
+      reject(new ApiError(x.status, body?.error?.code ?? 'ERROR', body?.error?.message ?? `Upload failed (${x.status})`, body?.error?.details));
+    };
+    x.send(form);
+  });
+}

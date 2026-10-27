@@ -1,5 +1,5 @@
 import { createContext, forwardRef, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Inbox, Loader2, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Clock, Inbox, Info, Loader2, X, XCircle } from 'lucide-react';
 import { errDetails, errMsg } from '../lib/api';
 import type { Tone } from '../lib/format';
 
@@ -16,7 +16,7 @@ const BTN: Record<string, string> = {
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof BTN; size?: 'sm' | 'md'; busy?: boolean };
 export const Button = forwardRef<HTMLButtonElement, BtnProps>(({ variant = 'secondary', size = 'md', busy, className, children, disabled, type = 'button', ...p }, ref) => (
   <button ref={ref} type={type} disabled={disabled || busy} {...p}
-    className={cx('inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors duration-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-teal focus-visible:outline-offset-2',
+    className={cx('btn-vibe inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors duration-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-teal focus-visible:outline-offset-2',
       size === 'sm' ? 'min-h-[32px] px-2.5 py-1 text-[13px]' : 'min-h-[40px] px-3.5 py-2 text-sm',
       BTN[variant], className)}>
     {busy && <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />}{children}
@@ -40,7 +40,7 @@ export const Badge = ({ tone = 'neutral', children, title }: { tone?: Tone; chil
 
 // ------------------------------------------------------------------ layout bits
 export const Card = ({ title, actions, children, className, pad = true }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; pad?: boolean }) => (
-  <section className={cx('min-w-0 rounded-lg border border-line bg-white shadow-xs', className)}>
+  <section className={cx('polished-card min-w-0 border border-line bg-white', className)}>
     {(title || actions) && (
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <h2 className="text-[15px] font-semibold text-ink truncate">{title}</h2>
@@ -145,8 +145,8 @@ export function Modal({ title, onClose, children, wide, footer }: { title: strin
 // ------------------------------------------------------------------ tables
 // fluid=true: no min-width, no horizontal scroll (for narrow summary tables inside cards)
 // fluid=false (default): min-w-[640px] with horizontal scroll wrapper for full data tables
-export const Table = ({ children, className, fluid }: { children: ReactNode; className?: string; fluid?: boolean }) => (
-  <div className={cx('relative overflow-x-auto', fluid ? '' : 'table-scroll-x', className)}><table className={cx('w-full text-left', !fluid && 'min-w-[640px]')}>{children}</table></div>);
+export const Table = ({ children, className, fluid, label = 'Data table' }: { children: ReactNode; className?: string; fluid?: boolean; label?: string }) => (
+  <div tabIndex={0} role="region" aria-label={label} className={cx('relative overflow-x-auto', fluid ? '' : 'table-scroll-x', className)}><table className={cx('w-full text-left', !fluid && 'min-w-[640px]')}>{children}</table></div>);
 
 // Primary label for a document: its descriptive name, with the document ID (and reference number) as secondary text.
 export const DocLabel = ({ name, code, reference, file }: { name?: string | null; code?: string | null; reference?: string | null; file?: string | null }) => (
@@ -154,7 +154,7 @@ export const DocLabel = ({ name, code, reference, file }: { name?: string | null
     <span className="block text-[13px] font-normal text-muted">{[code && `Document ID: ${code}`, reference && `Ref ${reference}`, file].filter(Boolean).join(' · ')}</span></span>);
 export const Th = ({ children, sort, active, dir, onSort, className }: { children?: ReactNode; sort?: string; active?: boolean; dir?: string; onSort?: (k: string) => void; className?: string }) => (
   <th scope="col" aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : undefined} className={cx('border-b border-line bg-[#f8fafc] px-3.5 py-2.5 text-xs font-semibold text-muted uppercase tracking-wider', className)}>
-    {sort && onSort ? <button className="inline-flex items-center gap-1 hover:text-ink transition-colors" onClick={() => onSort(sort)}>{children}<span aria-hidden className="text-[10px]">{active ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span></button> : children}
+    {sort && onSort ? <button className="-my-1.5 inline-flex min-h-[28px] items-center gap-1 hover:text-ink transition-colors" onClick={() => onSort(sort)}>{children}<span aria-hidden className="text-[10px]">{active ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span></button> : children}
   </th>);
 export const Td = ({ children, className, colSpan }: { children?: ReactNode; className?: string; colSpan?: number }) => <td colSpan={colSpan} className={cx('border-b border-line/70 px-3.5 py-3 align-top text-sm', className)}>{children}</td>;
 
@@ -221,3 +221,47 @@ export function DeadlineMeter({ daysInStage, daysToDue, status, due, compact }: 
 
 export const KV = ({ label, children }: { label: string; children: ReactNode }) => (
   <div><dt className="text-[13px] text-muted">{label}</dt><dd className="font-medium">{children}</dd></div>);
+
+// ------------------------------------------------------------------ status badge: icon + text + colour, so meaning never depends on colour alone
+const ICON: Record<Tone, any> = { good: Check, warn: AlertTriangle, bad: XCircle, brand: Clock, teal: Info, neutral: CircleDashed };
+export const StatusBadge = ({ tone = 'neutral', children, title }: { tone?: Tone; children: ReactNode; title?: string }) => {
+  const I = ICON[tone];
+  return <span title={title} className={cx('inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium', TONES[tone])}><I className="h-3 w-3 shrink-0" aria-hidden />{children}</span>;
+};
+
+// ------------------------------------------------------------------ tooltip: shown on hover AND keyboard focus, and described to screen readers
+export function Tip({ text, children, side = 'right' }: { text: string; children: ReactNode; side?: 'right' | 'bottom' }) {
+  const id = useId(); const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)} onFocus={() => setShow(true)} onBlur={() => setShow(false)}>
+      <span aria-describedby={show ? id : undefined} className="contents">{children}</span>
+      {show && <span id={id} role="tooltip" className={cx('pointer-events-none absolute z-50 whitespace-nowrap rounded bg-ink px-2 py-1 text-[12px] text-white shadow-lg', side === 'right' ? 'left-full top-1/2 ml-2 -translate-y-1/2' : 'left-1/2 top-full mt-1.5 -translate-x-1/2')}>{text}</span>}
+    </span>);
+}
+
+// ------------------------------------------------------------------ confirmation for consequential actions
+export function ConfirmDialog({ title, body, confirmLabel, danger, onConfirm, onClose }: { title: string; body: ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => Promise<unknown>; onClose: () => void }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  const go = async () => { setBusy(true); setErr(null); try { await onConfirm(); onClose(); } catch (e) { setErr(e); } finally { setBusy(false); } };
+  return (
+    <Modal title={title} onClose={onClose} footer={<><Button onClick={onClose}>Cancel</Button><Button variant={danger ? 'danger' : 'primary'} busy={busy} onClick={go}>{confirmLabel}</Button></>}>
+      <div>{body}</div>{!!err && <ErrorBox error={err} />}
+    </Modal>);
+}
+
+// ------------------------------------------------------------------ stepper (progress through a long task)
+export function Stepper({ steps, label = 'Progress' }: { steps: { label: string; state: 'done' | 'current' | 'todo'; hint?: string }[]; label?: string }) {
+  return (
+    <ol aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2">
+      {steps.map((s, i) => (
+        <li key={s.label} aria-current={s.state === 'current' ? 'step' : undefined} className="flex items-center gap-2">
+          <span className={cx('flex h-6 w-6 items-center justify-center rounded-full border text-[12px] font-semibold', s.state === 'done' ? 'border-good bg-good text-white' : s.state === 'current' ? 'border-brand bg-brand text-white' : 'border-line bg-white text-muted')}>{s.state === 'done' ? <Check className="h-3.5 w-3.5" aria-hidden /> : i + 1}</span>
+          <span className={cx('text-[14px]', s.state === 'current' ? 'font-semibold' : s.state === 'todo' ? 'text-muted' : '')}>{s.label}{s.hint && <span className="block text-[12px] font-normal text-muted">{s.hint}</span>}</span>
+          <span className="sr-only">{s.state === 'done' ? '(completed)' : s.state === 'current' ? '(current step)' : '(not started)'}</span>
+        </li>))}
+    </ol>);
+}
+
+// ------------------------------------------------------------------ skeleton, used only where a list will replace it
+export const Skeleton = ({ rows = 4 }: { rows?: number }) => (
+  <div role="status" aria-label="Loading" className="space-y-2 p-4">{Array.from({ length: rows }).map((_, i) => <div key={i} className="skeleton h-5" style={{ width: `${90 - i * 9}%` }} />)}<span className="sr-only">Loading…</span></div>);

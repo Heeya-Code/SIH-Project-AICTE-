@@ -13,6 +13,7 @@ import { documentsRouter, undertakingsRouter, evcRouter, escalationsRouter, task
 import { usersRouter, adminRouter, auditRouter, workflowsRouter } from './routes/admin';
 import { migrationStatus } from './db';
 import { publicDataRouter } from './routes/publicdata';
+import { searchRouter, caseExtrasRouter } from './routes/ux';
 import { analyticsRouter, intelligenceRouter, regulatoryRouter, referenceRouter, integrityRouter } from './routes/intelligence';
 
 export function createApp(db: DB, opts: { log?: (m: string) => void; schedulerSeconds?: number } = {}) {
@@ -20,7 +21,7 @@ export function createApp(db: DB, opts: { log?: (m: string) => void; schedulerSe
   const app = express();
   app.disable('x-powered-by');
   if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY);
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: { useDefaults: true, directives: { 'frame-src': ["'self'", 'blob:'], 'img-src': ["'self'", 'data:', 'blob:'], 'object-src': ["'none'"] } } }));
   app.use((req, res, next) => { req.correlationId = String(req.headers['x-correlation-id'] ?? crypto.randomUUID()).slice(0, 64); res.setHeader('X-Correlation-Id', req.correlationId); next(); });
   app.use(express.json({ limit: '200kb' }));
 
@@ -33,6 +34,8 @@ export function createApp(db: DB, opts: { log?: (m: string) => void; schedulerSe
   const api = express.Router();
   api.use(authenticate(db));
   api.use('/lookups', lookupsRouter(db));
+  api.use('/search', searchRouter(db));
+  api.use('/applications', caseExtrasRouter(db));
   api.use('/applications', applicationsRouter(db));
   api.use('/documents', documentsRouter(db));
   api.use('/undertakings', undertakingsRouter(db));

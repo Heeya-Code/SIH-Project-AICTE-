@@ -4,6 +4,31 @@ SIH 2026, PS4: approval workflow automation, compliance monitoring and alert man
 **All data is synthetic. This is not an AICTE system and is not connected to one.** Every deadline, reminder interval and
 escalation delay is a sample value an administrator would replace from the applicable Approval Process Handbook.
 
+## Demo in two minutes
+
+1. `npm run setup`, `npm run build`, `npm start`, then open http://localhost:4000.
+2. The front page has a **Login** button. Each role card ("Try as regional officer" and so on) opens the login with that role filled in. Press **Sign in**. Every demo account uses the password `Demo@1234`.
+3. Suggested path: sign in as the **Institution**, start an application and upload the two documents, then use **Review and submit**. Sign out, sign in as the **Regional officer**, open **Document verification**, preview and verify a document, and read the case's **Audit history** tab.
+4. As **Administrator**, the *Demo clock* panel (bottom left) advances the date and runs the background jobs, so you can show reminders, overdue cases and escalations without waiting.
+5. The language menu (top right, and on the front page) switches the interface between English and ten Indian languages. Text added after the translation files were written appears in English until it is added to `web/src/i18n/source/en.json` and the locale files; `npm run i18n:check` validates the existing files only.
+
+## What changed in this release
+
+**Bugs fixed**
+- Every primary button, including the login button, was invisible: the stylesheet moved to a new palette but components still used the old colour names, so those classes produced no CSS. The old names are now mapped onto the new palette in `web/src/index.css`.
+- The administrator account showed a blank screen (React error #310): `DemoPanel` returned before all its hooks ran. Non-admin users also triggered a 403 on every page.
+- The document reminder job crashed on any lease with auto-renewal switched on (a malformed `INSERT INTO undertakings`), so no reminders were sent. Leftover debug logging was removed.
+- Uploading a renewed document used to close and "verify" the automatic renewal obligation. It is now recorded as an evidence submission that waits for an officer.
+- Migration 005 rewrote existing databases' lease reminder schedule to a different value from freshly seeded ones; it is now a no-op. Run `npm run reset` to regenerate a database seeded with the intended schedule (180, 90 and 30 days).
+
+**Added**
+- A public front page and a clearer login (back link, role pre-fill, a message saying what to press next).
+- A ranked **Needs your attention** list on every dashboard, with the reason for each item and the ordering rule shown.
+- Global search (`Ctrl+K`), a notification centre grouped by urgency, a help panel, breadcrumbs and a page title on every page.
+- On a case: a status strip (stage, who it is waiting on, what is needed now, what happens next), a readiness checklist, a review-and-confirm step before submitting, in-page document preview, and Deficiencies, Notifications and Audit history tabs.
+- Upload progress, saved filters (stored in the browser), recently viewed cases, and a confirmation step before publishing a workflow version.
+- Accessibility: an automated WCAG 2.2 A/AA scan (axe-core) of 37 pages across six roles plus the public pages reports no failures; every page has its own title and the layouts were checked at 1280, 1024, 768 and 390 px.
+
 ## Run it
 
 Requires Node 20+ (tested on 22).
@@ -66,9 +91,25 @@ Layout changes (fixed sidebar, hidden scrollbars, no horizontal overflow at 390p
 - **Regulatory sources and rules** (page *Regulatory rules*, `docs/SOURCES.md`). Rules carry source, section, page note, verification status and review history, and are kept apart from configurable demonstration assumptions. **The official handbook PDF could not be downloaded automatically**; rules were read in excerpts of copies and are paraphrased, so none is marked as checked against the original until an administrator records that.
 - **Analytics** (page *Analytics*): status, category, region and stage counts, time per stage, bottleneck indicators with the data behind each score, officer workload and unassigned cases, expiring documents, EVC status, processing-time history, filters and drill-down into the underlying cases. Figures are labelled *Calculated*; the only estimate is labelled as an illustrative forecast.
 - **Alerts** (page *Alerts*): published rules for deadlines, expiry, missing or returned documents, stalled cases, unassigned cases and escalation eligibility. Each alert lists the rule and the facts. Alerts never change a case.
-- **Handbook assistant** (assistant panel, *AICTE handbook* tab): keyword retrieval over the indexed, paraphrased excerpts; returns source, section, page note and verification status, and says so when evidence is insufficient. It refuses to decide or predict approvals. It is not a language model.
+- **Assistant**: the *My case data* mode uses the same role- and institution-scoped records as the application, including application stages, tasks, deficiencies, current document status/expiry, EVC schedules, recorded outcomes, and officer-only audit events. The *AICTE handbook* mode retrieves indexed paraphrased excerpts and surfaces source, section, page and verification caveats. Both modes support short follow-up context. A configurable OpenAI-compatible chat-completions model can explain the retrieved evidence; without its credentials, the assistant explicitly stays in retrieval/rule-based mode and does not claim to be generative. It does not decide applications.
+- **Sample document library** (page *Document validity*): professionally formatted, generated PDFs for the document types already present in the application requirements, plus clearly separate workflow-record examples for undertakings, compliance reports, inspection reports, deficiency notices, clarifications, decisions, and renewals. Workflow examples are not uploadable requirements. Samples and synthetic seeded document downloads are prominently marked fictional and not official; they never change a document's review status. Actual non-synthetic uploads continue to be served from protected storage.
 - **Deficiencies** are raised when an application is returned; the institution's response is the corrective action; the reviewing officer's next action closes it. EVC visits now store a report with an outcome.
 - Not implemented: automatic downloading of public datasets, a state-to-AICTE-region mapping for the demo regions, document parsing or extraction (no such feature existed to improve), a larger handbook index, and any live AICTE integration.
+
+### Optional assistant language model
+
+The assistant works without an external model. To enable natural-language explanations and general questions, configure an OpenAI-compatible chat-completions endpoint on the **server only**:
+
+```text
+AI_API_KEY=...
+AI_MODEL=gpt-4o-mini
+AI_BASE_URL=https://api.openai.com/v1
+AI_TIMEOUT_MS=20000
+```
+
+`OPENAI_API_KEY` is also accepted as an alias for `AI_API_KEY`. For a compatible provider, set `AI_BASE_URL` to its API root and `AI_MODEL` to a supported model. Do not put credentials in the web app or commit them. When configured, the provider receives the user's question, recent turns and only the live facts already permitted by the current role, plus retrieved public/paraphrased excerpts. Select a provider whose data-handling terms are acceptable for your deployment. Provider failures are reported so the user can retry; source excerpts remain available. No key is configured by default, so the default experience is not an LLM.
+
+Sample PDFs are generated on the server from the existing document type catalog, with separate workflow-record examples that are not uploadable requirements. Existing synthetic records use the same generator, populated with that record's own stored demo metadata; ordinary uploaded documents continue to use their protected stored files. The library intentionally does not add unsupported document requirements or represent a sample as an official certificate.
 
 ## Public data import (real published data)
 

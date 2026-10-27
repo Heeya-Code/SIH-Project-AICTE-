@@ -23,7 +23,7 @@ export default function CalendarPage() {
         {TYPES.map(([k, l]) => <label key={k} className="flex items-center gap-2"><input type="checkbox" checked={types.includes(k)} onChange={() => toggle(k)} />{l}</label>)}</fieldset>
       <Query q={q}>{(rows: any[]) => (
         <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-          <Card><MonthGrid month={month} onMonth={setMonth} today={lk.data?.clock.today ?? new Date().toISOString().slice(0, 10)} events={rows.map(e => ({ date: e.date, title: e.title, tone: tone(e.status), link: e.link }))} /></Card>
+          <Card className="min-w-0"><MonthGrid month={month} onMonth={setMonth} today={lk.data?.clock.today ?? new Date().toISOString().slice(0, 10)} events={rows.map(e => ({ date: e.date, title: e.title, tone: tone(e.status), link: e.link }))} /></Card>
           <Card title="This month" pad={false}>{rows.length === 0 ? <Empty title="Nothing due this month" /> : (
             <ul className="max-h-[640px] overflow-y-auto">{rows.map((e, i) => <li key={i} className="border-b border-line/70 px-4 py-2.5"><p className="flex items-center justify-between gap-2"><Link className="font-medium text-brand hover:underline" to={e.link}>{e.title}</Link><Badge tone={tone(e.status)}>{pretty(e.status)}</Badge></p><p className="text-[13px] text-muted">{fmtDate(e.date)}, {e.institution}</p></li>)}</ul>)}</Card>
         </div>)}</Query>

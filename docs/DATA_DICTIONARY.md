@@ -164,7 +164,7 @@ Required documents per category with `basis` and the supporting rule.
 
 ## documents
 
-Document versions. `lineage_id` groups versions; `is_current` marks the live one; `synthetic` flags generated files.
+Document versions. `lineage_id` groups versions; `is_current` marks the live one; `synthetic` flags generated files. For synthetic records, the protected download route generates a detailed fictional PDF from the stored record metadata instead of returning the seed's tiny placeholder file. Non-synthetic records are read from private storage unchanged.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -534,7 +534,7 @@ Institution records imported from published files. Kept separate from the fictio
 
 ## reference_chunks
 
-Paraphrased excerpts searchable by the handbook assistant.
+Paraphrased excerpts searchable by the handbook assistant using SQLite FTS5 ranking. An optional server-configured OpenAI-compatible model may explain retrieved excerpts; no model is enabled by default. Generated sample-document content is structured server-side and can be retrieved by the assistant separately from regulatory evidence. PDF ingestion and automatic official-source browsing are not implemented.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -788,4 +788,3 @@ Workflow families.
 | code | TEXT | required |
 | name | TEXT | required |
 | description | TEXT |  |
-

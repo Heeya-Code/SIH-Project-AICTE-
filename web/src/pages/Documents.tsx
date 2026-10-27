@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, History, RefreshCw } from 'lucide-react';
+import { Download, Eye, History, RefreshCw } from 'lucide-react';
+import { DocPreview } from '../components/DocPreview';
 import { api, download, qstr } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLookupMaps } from '../lib/hooks';
@@ -24,15 +25,39 @@ function Versions({ doc, onClose }: { doc: any; onClose: () => void }) {
 
 export default function Documents() {
   const { user } = useAuth(); const lk = useLookupMaps(); const qc = useQueryClient(); const toast = useToast();
-  const [sp, setSp] = useSearchParams(); const [renew, setRenew] = useState<any>(null); const [versions, setVersions] = useState<any>(null); const [ret, setRet] = useState<any>(null);
+  const [sp, setSp] = useSearchParams(); const [renew, setRenew] = useState<any>(null); const [versions, setVersions] = useState<any>(null); const [ret, setRet] = useState<any>(null); const [prev, setPrev] = useState<any>(null); const [samplePreview, setSamplePreview] = useState<any>(null);
   const f = Object.fromEntries(sp.entries()), page = Number(f.page ?? 1);
   const set = (p: Record<string, string>) => { const n = new URLSearchParams(sp); for (const [k, v] of Object.entries(p)) v ? n.set(k, v) : n.delete(k); if (!('page' in p)) n.delete('page'); setSp(n); };
   const q = useQuery({ queryKey: ['documents', f], queryFn: () => api<any>(`/documents${qstr({ ...f, page, pageSize: 15 })}`), placeholderData: p => p });
+  const samples = useQuery({ queryKey: ['document-samples'], queryFn: () => api<{ rows: any[] }>('/documents/samples') });
+  useEffect(() => {
+    const key = sp.get('sample');
+    const found = samples.data?.rows.find(x => x.doc_type === key);
+    if (found) setSamplePreview(found);
+  }, [sp, samples.data]);
   const officer = ['regional_officer', 'bureau_officer'].includes(user!.role);
   const verify = async (d: any, decision: string, note?: string) => { await api(`/documents/${d.id}/verify`, { body: { decision, note } }); toast.ok(decision === 'verified' ? 'Document verified' : 'Document returned'); qc.invalidateQueries({ queryKey: ['documents'] }); };
   return (
     <>
       <PageHeader title="Document validity" subtitle="Leases and other prescribed documents, with their actual expiry dates. Reminders go out automatically before expiry; renewals are kept as new versions." />
+      <Card title="Sample document library" className="mb-5">
+        <p className="mb-4 text-sm text-muted">Fictional examples for the document types used in this prototype. Samples are not official certificates, submitted evidence, or proof of compliance.</p>
+        <Query q={samples}>{(data: { rows: any[] }) => (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.rows.map((sample: any) => (
+              <article key={sample.doc_type} className="rounded-xl border border-line bg-paper/60 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><h2 className="font-semibold text-ink">{sample.display_name}</h2><p className="mt-1 text-[13px] text-muted">{sample.description}</p></div>
+                  <Badge tone="warn">{sample.kind === 'workflow_example' ? 'Workflow example' : 'Document sample'}</Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => setSamplePreview(sample)}><Eye className="h-4 w-4" aria-hidden />Preview</Button>
+                  <Button size="sm" variant="secondary" onClick={() => download(`/documents/samples/download${qstr({ doc_type: sample.doc_type })}`, sample.file_name).catch(e => toast.err(e.message))}><Download className="h-4 w-4" aria-hidden />Download sample</Button>
+                </div>
+              </article>
+            ))}
+          </div>)}</Query>
+      </Card>
       <Card pad={false}>
         <div className="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="Expiry">{id => <Select id={id} value={f.expiry ?? ''} onChange={e => set({ expiry: e.target.value })}><option value="">Any</option><option value="expired">Expired</option><option value="30">Within 30 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="no_expiry">No expiry date</option></Select>}</Field>
@@ -50,12 +75,15 @@ export default function Documents() {
                 <Td><Badge tone={toneFor(x.verification_status)}>{pretty(x.verification_status)}</Badge></Td>
                 <Td>{x.expiry_date ? <Badge tone={x.renewal_status === 'expired' ? 'bad' : x.renewal_status === 'due_for_renewal' ? 'warn' : 'neutral'}>{pretty(x.renewal_status)}</Badge> : '–'}</Td>
                 <Td className="whitespace-nowrap">
-                  <Button size="sm" variant="ghost" aria-label={`Download ${x.file_name}`} onClick={() => download(`/documents/${x.id}/download`, x.file_name).catch(e => toast.err(e.message))}><Download className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" aria-label={`Preview ${x.display_name}`} onClick={() => setPrev(x)}><Eye className="h-4 w-4" aria-hidden /></Button>
+                  <Button size="sm" variant="ghost" aria-label={`Download ${x.display_name}`} onClick={() => download(`/documents/${x.id}/download`, x.file_name).catch(e => toast.err(e.message))}><Download className="h-4 w-4" /></Button>
                   <Button size="sm" variant="ghost" aria-label="Version history" onClick={() => setVersions(x)}><History className="h-4 w-4" /></Button>
                   {user!.role === 'institution' && x.expiry_date && <Button size="sm" onClick={() => setRenew(x)}><RefreshCw className="h-3.5 w-3.5" aria-hidden />Renew</Button>}
                   {officer && x.verification_status === 'pending' && <><Button size="sm" variant="ghost" onClick={() => verify(x, 'verified').catch(e => toast.err(e.message))}>Verify</Button><Button size="sm" variant="ghost" onClick={() => setRet(x)}>Return</Button></>}</Td></tr>))}</tbody></Table>
             <Pager page={d.page} pages={d.pages} total={d.total} onPage={p => set({ page: String(p) })} /></>)}</Query>
       </Card>
+      {prev && <DocPreview id={prev.id} name={prev.display_name} fileName={prev.file_name} onClose={() => setPrev(null)} />}
+      {samplePreview && <DocPreview path={`/documents/samples/download${qstr({ doc_type: samplePreview.doc_type })}`} name={samplePreview.display_name} fileName={samplePreview.file_name} sample onClose={() => setSamplePreview(null)} />}
       {renew && <UploadDialog renewOf={renew} onClose={() => setRenew(null)} />}
       {versions && <Versions doc={versions} onClose={() => setVersions(null)} />}
       {ret && <ReasonDialog title={`Return ${ret.display_name}`} required label="What needs to be corrected?" submitLabel="Return document" onSubmit={r => verify(ret, 'returned', r)} onClose={() => setRet(null)} />}
